@@ -855,7 +855,8 @@ impl World {
         let total = (d.pop as f32 * 0.82) as usize;
         // 開戦時の兵の割合：大陸の大国は大軍、英国は小さな職業軍、中立国は少なめ
         let mil_share = match i {
-            GER | AUH => 0.42,
+            GER => 0.5,
+            AUH => 0.42,
             FRA => 0.38,
             RUS => 0.38,
             GBR => 0.16,
