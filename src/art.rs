@@ -2,7 +2,7 @@
 
 use crate::gfx::Gfx;
 use crate::rng::{fbm, hash2};
-use crate::world::{BKind, Era, UnitKind, HEROES, N_KINDS};
+use crate::world::{BKind, Era, UnitKind, N_KINDS};
 use crate::gfx::Bitmap as ID2D1Bitmap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -150,56 +150,6 @@ const RAW_PROP_SPRITES: [&[u8]; 3] = [
     include_bytes!("../assets/map/mine.bgra"),
 ];
 
-const HERO_SPRITE_SZ: usize = 128;
-const RAW_HERO_SPRITES: [&[u8]; 46] = [
-    include_bytes!("../assets/heroes/hero_00.bgra"),
-    include_bytes!("../assets/heroes/hero_01.bgra"),
-    include_bytes!("../assets/heroes/hero_02.bgra"),
-    include_bytes!("../assets/heroes/hero_03.bgra"),
-    include_bytes!("../assets/heroes/hero_04.bgra"),
-    include_bytes!("../assets/heroes/hero_05.bgra"),
-    include_bytes!("../assets/heroes/hero_06.bgra"),
-    include_bytes!("../assets/heroes/hero_07.bgra"),
-    include_bytes!("../assets/heroes/hero_08.bgra"),
-    include_bytes!("../assets/heroes/hero_09.bgra"),
-    include_bytes!("../assets/heroes/hero_10.bgra"),
-    include_bytes!("../assets/heroes/hero_11.bgra"),
-    include_bytes!("../assets/heroes/hero_12.bgra"),
-    include_bytes!("../assets/heroes/hero_13.bgra"),
-    include_bytes!("../assets/heroes/hero_14.bgra"),
-    include_bytes!("../assets/heroes/hero_15.bgra"),
-    include_bytes!("../assets/heroes/hero_16.bgra"),
-    include_bytes!("../assets/heroes/hero_17.bgra"),
-    include_bytes!("../assets/heroes/hero_18.bgra"),
-    include_bytes!("../assets/heroes/hero_19.bgra"),
-    include_bytes!("../assets/heroes/hero_20.bgra"),
-    include_bytes!("../assets/heroes/hero_21.bgra"),
-    include_bytes!("../assets/heroes/hero_22.bgra"),
-    include_bytes!("../assets/heroes/hero_23.bgra"),
-    include_bytes!("../assets/heroes/hero_24.bgra"),
-    include_bytes!("../assets/heroes/hero_25.bgra"),
-    include_bytes!("../assets/heroes/hero_26.bgra"),
-    include_bytes!("../assets/heroes/hero_27.bgra"),
-    include_bytes!("../assets/heroes/hero_28.bgra"),
-    include_bytes!("../assets/heroes/hero_29.bgra"),
-    include_bytes!("../assets/heroes/hero_30.bgra"),
-    include_bytes!("../assets/heroes/hero_31.bgra"),
-    include_bytes!("../assets/heroes/hero_32.bgra"),
-    include_bytes!("../assets/heroes/hero_33.bgra"),
-    include_bytes!("../assets/heroes/hero_34.bgra"),
-    include_bytes!("../assets/heroes/hero_35.bgra"),
-    include_bytes!("../assets/heroes/hero_36.bgra"),
-    include_bytes!("../assets/heroes/hero_37.bgra"),
-    include_bytes!("../assets/heroes/hero_38.bgra"),
-    include_bytes!("../assets/heroes/hero_39.bgra"),
-    include_bytes!("../assets/heroes/hero_40.bgra"),
-    include_bytes!("../assets/heroes/hero_41.bgra"),
-    include_bytes!("../assets/heroes/hero_42.bgra"),
-    include_bytes!("../assets/heroes/hero_43.bgra"),
-    include_bytes!("../assets/heroes/hero_44.bgra"),
-    include_bytes!("../assets/heroes/hero_45.bgra"),
-];
-
 const RAW_DIVINE_UNIT_SPRITES: [&[u8]; 2] = [
     include_bytes!("../assets/divine/divine_infantry.bgra"),
     include_bytes!("../assets/divine/divine_cavalry.bgra"),
@@ -234,8 +184,6 @@ pub struct Art {
     pub prop_sprites_flip: [Option<ID2D1Bitmap>; 3],
     pub prop_sprites_fog: [Option<ID2D1Bitmap>; 3],
     pub prop_sprites_fog_flip: [Option<ID2D1Bitmap>; 3],
-    pub hero_sprites: Vec<Option<ID2D1Bitmap>>,
-    pub hero_sprites_flip: Vec<Option<ID2D1Bitmap>>,
     pub divine_unit_sprites: [Option<ID2D1Bitmap>; 2],
     pub divine_unit_sprites_flip: [Option<ID2D1Bitmap>; 2],
     pub divine_bld_sprites: [Option<ID2D1Bitmap>; 2],
@@ -867,8 +815,6 @@ impl Art {
             prop_sprites_flip: Default::default(),
             prop_sprites_fog: Default::default(),
             prop_sprites_fog_flip: Default::default(),
-            hero_sprites: Vec::new(),
-            hero_sprites_flip: Vec::new(),
             divine_unit_sprites: Default::default(),
             divine_unit_sprites_flip: Default::default(),
             divine_bld_sprites: Default::default(),
@@ -939,13 +885,6 @@ impl Art {
             self.prop_sprites_fog[p] = gfx.create_bitmap(psz, psz, &load_raw_sprite_bgra(RAW_PROP_SPRITES[p], PROP_SPRITE_SZ, false, 0.52));
             self.prop_sprites_fog_flip[p] = gfx.create_bitmap(psz, psz, &load_raw_sprite_bgra(RAW_PROP_SPRITES[p], PROP_SPRITE_SZ, true, 0.52));
         }
-        let hsz = HERO_SPRITE_SZ as u32;
-        self.hero_sprites.clear();
-        self.hero_sprites_flip.clear();
-        for h in 0..RAW_HERO_SPRITES.len().min(HEROES.len()) {
-            self.hero_sprites.push(gfx.create_bitmap(hsz, hsz, &load_raw_sprite_bgra(RAW_HERO_SPRITES[h], HERO_SPRITE_SZ, false, 1.0)));
-            self.hero_sprites_flip.push(gfx.create_bitmap(hsz, hsz, &load_raw_sprite_bgra(RAW_HERO_SPRITES[h], HERO_SPRITE_SZ, true, 1.0)));
-        }
         let usz = UNIT_SPRITE_SZ as u32;
         for d in 0..2 {
             self.divine_unit_sprites[d] = gfx.create_bitmap(usz, usz, &load_raw_sprite_bgra(RAW_DIVINE_UNIT_SPRITES[d], UNIT_SPRITE_SZ, false, 1.0));
@@ -954,17 +893,6 @@ impl Art {
         for d in 0..2 {
             self.divine_bld_sprites[d] = gfx.create_bitmap(bsz, bsz, &load_raw_sprite_bgra(RAW_DIVINE_BLD_SPRITES[d], BLD_SPRITE_SZ, false, 1.0));
             self.divine_bld_sprites_fog[d] = gfx.create_bitmap(bsz, bsz, &load_raw_sprite_bgra(RAW_DIVINE_BLD_SPRITES[d], BLD_SPRITE_SZ, false, 0.55));
-        }
-    }
-
-    pub fn hero_sprite(&self, hero_idx: usize, flip_x: bool) -> Option<&ID2D1Bitmap> {
-        if hero_idx >= self.hero_sprites.len() {
-            return None;
-        }
-        if flip_x {
-            self.hero_sprites_flip[hero_idx].as_ref()
-        } else {
-            self.hero_sprites[hero_idx].as_ref()
         }
     }
 
@@ -1485,7 +1413,7 @@ mod asset_tests {
     }
     #[test]
     fn embedded_sprites_have_valid_premultiplied_alpha() {
-        for (sprites, size) in [(RAW_NATIONAL_INFANTRY.as_slice(),160), (RAW_LATE_INFANTRY.as_slice(),160), (RAW_UNIT_SPRITES.as_slice(),160), (RAW_BLD_SPRITES.as_slice(),192), (RAW_HERO_SPRITES.as_slice(),128)] {
+        for (sprites, size) in [(RAW_NATIONAL_INFANTRY.as_slice(),160), (RAW_LATE_INFANTRY.as_slice(),160), (RAW_UNIT_SPRITES.as_slice(),160), (RAW_BLD_SPRITES.as_slice(),192)] {
             for raw in sprites {
                 assert_eq!(raw.len(), size * size * 4);
                 assert!(raw.chunks_exact(4).any(|p| p[3] == 0));

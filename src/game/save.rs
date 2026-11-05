@@ -57,7 +57,6 @@ impl Game {
         w.usize(NATIONS.len());
         w.usize(HISTORY.len());
         w.usize(CONVOYS.len());
-        w.usize(HEROES.len());
         w.u32(self.seed);
         // 画面の状態
         w.f32(self.cam.x);
@@ -87,7 +86,7 @@ impl Game {
         if ver != SAVE_VERSION {
             return Err(tf!("記録の形式が違う（記録は第{}版、このゲームは第{}版）", "Different save format (the save is version {}, this game is version {})", "存档格式不同（存档为第{}版，本游戏为第{}版）", ver, SAVE_VERSION));
         }
-        let dims = [MAP_W, MAP_H, NATIONS.len(), HISTORY.len(), CONVOYS.len(), HEROES.len()];
+        let dims = [MAP_W, MAP_H, NATIONS.len(), HISTORY.len(), CONVOYS.len()];
         for d in dims {
             if r.usize()? != d {
                 return Err(t!("別の版のゲームで作られた記録で、読み込めない", "This save was made by another version of the game and cannot be loaded", "该存档由其他版本的游戏创建，无法读取").into());
@@ -116,7 +115,6 @@ impl Game {
         self.tut = None;
         self.screen = Screen::Playing;
         self.title_sel = Some(self.world.player);
-        self.heroic_opt = self.world.heroic;
         self.rebuild_terrain();
         self.cam = cam;
         self.zoom = if zoom.is_finite() { zoom.clamp(1.2, 64.0) } else { 22.0 };
@@ -148,7 +146,6 @@ impl Game {
         self.show_help = false;
         self.show_chron = false;
         self.show_market = false;
-        self.show_summon = false;
         self.show_save = false;
         self.overlay_ver = u32::MAX;
         self.minimap_ver = u32::MAX;

@@ -11,7 +11,6 @@ mod naval;
 mod opinion;
 mod traits;
 mod descent;
-mod heroes;
 mod save;
 pub use history::{Chron, Person, HISTORY, INITIAL_HOUSE};
 #[cfg(test)]
@@ -20,7 +19,6 @@ pub use naval::*;
 pub use opinion::*;
 pub use traits::*;
 pub use descent::*;
-pub use heroes::*;
 pub use save::SAVE_VERSION;
 pub use crate::lang::{sep, tx};
 
@@ -457,10 +455,8 @@ pub struct Unit {
     pub flash: f32,
     pub selected: bool,
     pub last_attacker: Option<Handle>,
-    /// 天使（英雄にしか傷つけられない）
+    /// 天使（どの兵にも傷つけられない）
     pub divine: bool,
-    /// 英雄（HEROES の番号、NONE=英雄ではない）
-    pub hero: u8,
     /// 建設の予約（今の建設を終えたら順に取りかかる）
     pub build_queue: VecDeque<Handle>,
     /// 渡海の予定（港へ向かって船に乗る）
@@ -726,8 +722,6 @@ pub struct World {
     pub descent: Option<Descent>,
     /// 撮影用：プレイヤーの国も AI が動かす
     pub ai_player: bool,
-    /// 英雄召喚（常に有効。記録の互換のために残す）
-    pub heroic: bool,
     pub time: f32,
     pub ai: Vec<AiState>,
     /// 海上：植民地からの船団・米国の参戦気運・無制限潜水艦作戦
@@ -805,7 +799,6 @@ impl World {
             player_orders: 0,
             descent: None,
             ai_player: false,
-            heroic: true,
             time: 0.0,
             ai: Vec::new(),
             sea: SeaState::new(),
@@ -1009,7 +1002,6 @@ impl World {
             selected: false,
             last_attacker: None,
             divine: false,
-            hero: NONE,
             build_queue: VecDeque::new(),
             ferry: None,
             ship: None,
@@ -1483,8 +1475,8 @@ impl World {
                 }
                 continue;
             }
-            if u.divine || u.hero != NONE {
-                // 天使は天のもの、英雄は人口の上限・維持費の外
+            if u.divine {
+                // 天使は天のもの（人口の上限・維持費の外）
                 n.mil_power += u.power * (u.hp / u.max_hp()).max(0.2);
             } else if u.kind.military() {
                 let crew = u.kind.crew();
@@ -1698,7 +1690,7 @@ impl World {
     fn pick_conscript(&self, ni: usize, p: V2) -> Option<usize> {
         let mut best: Option<(f32, usize)> = None;
         for (i, u) in self.units.iter().enumerate() {
-            if !u.alive || u.nation as usize != ni || u.kind != UnitKind::Worker || u.hero != NONE {
+            if !u.alive || u.nation as usize != ni || u.kind != UnitKind::Worker {
                 continue;
             }
             let busy = match u.order {
@@ -1755,9 +1747,9 @@ impl World {
         Ok(())
     }
 
-    /// 兵器に割り当てられる兵か（陸の兵で、兵器・英雄・天使でなく、渡海中でない）
+    /// 兵器に割り当てられる兵か（陸の兵で、兵器・天使でなく、渡海中でない）
     pub fn can_crew(u: &Unit) -> bool {
-        u.alive && u.kind.land_mil() && !u.kind.weapon() && u.hero == NONE && !u.divine && u.ferry.is_none() && u.ship.is_none()
+        u.alive && u.kind.land_mil() && !u.kind.weapon() && !u.divine && u.ferry.is_none() && u.ship.is_none()
     }
 
     /// 兵器に兵を割り当てる：選んだ兵のうち必要な数を兵器に乗せる（兵は兵器に変わり、戻せない）。
@@ -1865,9 +1857,6 @@ impl World {
     pub fn upgrade_unit(&mut self, h: Handle) -> Result<(), &'static str> {
         let cap = self.power_cap();
         let Some(u) = self.unit(h) else { return Err("") };
-        if u.hero != NONE {
-            return Err(t!("英雄は鍛錬できない", "Heroes cannot be trained", "英雄无法训练"));
-        }
         if u.kind == UnitKind::Transport || u.divine {
             return Err("");
         }
@@ -1893,9 +1882,6 @@ impl World {
     /// 兵⇔民の転換（能力は 2/3 に目減り）
     pub fn convert_unit(&mut self, h: Handle) -> Result<(), &'static str> {
         let Some(u) = self.unit(h) else { return Err("") };
-        if u.hero != NONE {
-            return Err(t!("英雄は民にできない", "Heroes cannot become workers", "英雄无法转为民"));
-        }
         if u.kind.naval() || u.divine || u.ferry.is_some() {
             return Err(t!("船は民にできない", "Ships cannot become workers", "船只无法转为民"));
         }
@@ -2117,15 +2103,13 @@ impl World {
     // ------------------------------------------------------------ 戦闘
     fn damage_unit(&mut self, ti: usize, dmg: f32, attacker: Option<Handle>, an: usize) {
         let killed;
-        // 天使を傷つけられるのは英雄だけ
-        let by_hero = attacker.and_then(|h| self.unit(h)).map_or(false, |a| a.hero != NONE);
         {
             let u = &mut self.units[ti];
-            if !u.alive || (u.divine && !by_hero) {
+            // 天使はどの兵にも傷つけられない
+            if !u.alive || u.divine {
                 return;
             }
-            // 英雄の一撃は天使によく効く
-            u.hp -= if u.divine { dmg * 3.0 } else { dmg };
+            u.hp -= dmg;
             u.flash = 0.15;
             u.last_attacker = attacker;
             killed = u.hp <= 0.0;
@@ -2392,10 +2376,7 @@ impl World {
         }
         let _ = spy;
         for u in self.units.iter_mut() {
-            if u.alive && u.hero != NONE {
-                // 英雄は傷が癒える
-                u.hp = (u.hp + u.max_hp() * 0.015 * dt).min(u.max_hp());
-            } else if u.alive && u.kind.military() && !u.divine && starving[u.nation as usize] {
+            if u.alive && u.kind.military() && !u.divine && starving[u.nation as usize] {
                 u.hp -= u.max_hp() * 0.01 * dt;
             }
         }
@@ -3240,13 +3221,6 @@ mod tests {
             assert!(e.nation < NATIONS.len());
             assert!(e.at >= START_YEAR - 0.01 && e.at < END_YEAR, "{}", e.title);
         }
-        // 英雄の素材は英雄の数だけある
-        assert_eq!(HEROES.len(), 46);
-        for n in 0..NATIONS.len() {
-            if NATIONS[n].playable {
-                assert!(heroes_of(n).count() >= 1, "{} に英雄がいない", NATIONS[n].name);
-            }
-        }
     }
 
     /// 史実の都市はすべて陸に置かれ、最初から建っている
@@ -3330,36 +3304,20 @@ mod tests {
         assert!(w.enqueue(bh, UnitKind::Infantry).is_err());
     }
 
-    /// 英雄は自国出身の者だけ呼べる。一国一人。天使を傷つけられるのは英雄だけ
+    /// 天使はどの兵にも傷つけられない
     #[test]
-    fn hero_summon_rules() {
+    fn angels_are_invulnerable() {
         let mut w = World::new(12345);
         let n = FRA;
-        let workers: Vec<Handle> = (0..w.units.len()).filter(|&i| w.units[i].alive && w.units[i].nation as usize == n && w.units[i].kind == UnitKind::Worker).map(|i| w.uh(i)).take(4).collect();
-        let foch = HEROES.iter().position(|h| h.name == "フォッシュ").unwrap();
-        let hind = HEROES.iter().position(|h| h.name == "ヒンデンブルク").unwrap();
-        assert!(w.can_summon(n, hind, &workers).is_err(), "他国の英雄を呼べた");
-        let (v, p) = w.sacrifice_power(n, &workers);
-        let h = w.summon_hero(n, foch, &workers).expect("召喚できない");
-        let hero = w.unit(h).unwrap();
-        assert_eq!(hero.hero as usize, foch);
-        assert!((hero.power - p * HEROES[foch].mult).abs() < 1e-3);
-        assert!(v.iter().all(|&x| w.unit(x).is_none()), "捧げた民が残っている");
-        let joffre = HEROES.iter().position(|h| h.name == "ジョッフル").unwrap();
-        let more: Vec<Handle> = (0..w.units.len()).filter(|&i| w.units[i].alive && w.units[i].nation as usize == n && w.units[i].kind == UnitKind::Worker).map(|i| w.uh(i)).take(3).collect();
-        assert!(w.can_summon(n, joffre, &more).is_err(), "二人目を呼べた");
-        // 天使：普通の兵では傷つかず、英雄なら傷つく
-        let pos = w.unit(h).unwrap().pos;
+        let soldier = (0..w.units.len()).find(|&i| w.units[i].alive && w.units[i].nation as usize == n && w.units[i].kind.military()).unwrap();
+        let pos = w.units[soldier].pos;
         let g = w.spawn_unit(ANGEL, UnitKind::Infantry, pos, 12.0);
         w.unit_mut(g).unwrap().divine = true;
         let gi = g.idx as usize;
         let hp0 = w.units[gi].hp;
-        let soldier = (0..w.units.len()).find(|&i| w.units[i].alive && w.units[i].nation as usize == n && w.units[i].kind.military() && w.units[i].hero == NONE).unwrap();
         let sh = w.uh(soldier);
         w.damage_unit(gi, 100.0, Some(sh), n);
         assert_eq!(w.units[gi].hp, hp0);
-        w.damage_unit(gi, 100.0, Some(h), n);
-        assert!(w.units[gi].hp < hp0);
     }
 
     /// 海の向こうへ動かした兵は、港で船に乗って渡り、上陸する

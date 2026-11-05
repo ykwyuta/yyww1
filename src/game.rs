@@ -1,7 +1,6 @@
 //! 画面・入力・HUD（独自実装の UI）
 
 mod chronicle;
-mod heroes;
 mod status;
 
 mod mobile;
@@ -120,8 +119,6 @@ enum Act {
     Market,
     /// 無制限潜水艦作戦の切り替え（ドイツ）
     Unrestricted,
-    Summon,
-    SummonHero(usize),
     /// 選んだ兵を兵器に割り当てる
     Crew(UnitKind),
     Tutorial,
@@ -204,7 +201,6 @@ pub struct Game {
     show_help: bool,
     show_chron: bool,
     show_market: bool,
-    show_summon: bool,
     /// 記録（セーブ・ロード）画面
     show_save: bool,
     /// いまの入力がタッチ操作か
@@ -223,8 +219,6 @@ pub struct Game {
     msg_cut: f32,
     /// 最後に記録した年（自動記録の間隔）
     autosave_years: f32,
-    /// 英雄召喚（常に有効。旧版の英霊モードの名残）
-    heroic_opt: bool,
     chron_scroll: usize,
     title_sel: Option<usize>,
     notice: Option<(String, f32)>,
@@ -376,7 +370,6 @@ impl Game {
             show_help: false,
             show_chron: false,
             show_market: false,
-            show_summon: false,
             show_save: false,
             touch: false,
             ov_scroll: 0.0,
@@ -387,7 +380,6 @@ impl Game {
             alerts_open: false,
             msg_cut: -1.0,
             autosave_years: 0.0,
-            heroic_opt: false,
             chron_scroll: 0,
             title_sel: None,
             notice: None,
@@ -730,7 +722,7 @@ impl Game {
                 return true;
             }
         }
-        if self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_summon || self.show_save || self.world.game_over.is_some() {
+        if self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_save || self.world.game_over.is_some() {
             return true;
         }
         if self.peace_pending() {
@@ -863,17 +855,10 @@ impl Game {
                     if let Some(s) = std::env::var("YY_SEL").ok().and_then(|v| v.parse().ok()) {
                         self.title_sel = Some(s);
                     }
-                    if std::env::var("YY_HEROIC").is_ok() {
-                        self.heroic_opt = true;
-                    }
                 }
                 if let Some(n) = nation {
                     self.title_sel = Some(n);
                     self.do_act(Act::Start);
-                    // 撮影用：英霊モード（YY_HEROIC=1）
-                    if std::env::var("YY_HEROIC").is_ok() {
-                        self.world.heroic = true;
-                    }
                     // 撮影用：自国も AI に任せる（YY_AIPLAY=1）
                     self.world.ai_player = std::env::var("YY_AIPLAY").is_ok();
                     // 撮影用：指定の年（紀元前）から始める（YY_YEAR=222 など）
@@ -1080,7 +1065,7 @@ impl Game {
                             return false;
                         }
                         let (mx0, my0, mx1, my1) = self.mm_rect();
-                        if x >= mx0 && x <= mx1 && y >= my0 && y <= my1 && !self.show_diplo && !self.show_help && !self.show_chron && !self.show_market && !self.show_summon && !self.show_save {
+                        if x >= mx0 && x <= mx1 && y >= my0 && y <= my1 && !self.show_diplo && !self.show_help && !self.show_chron && !self.show_market && !self.show_save {
                             self.mm_drag = true;
                             self.minimap_jump(x, y);
                             return false;
@@ -1237,8 +1222,7 @@ impl Game {
             VK_ESCAPE => {
                 if self.mode != Mode::Normal {
                     self.mode = Mode::Normal;
-                } else if self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_summon || self.show_save {
-                    self.show_summon = false;
+                } else if self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_save {
                     self.show_diplo = false;
                     self.show_help = false;
                     self.show_chron = false;
@@ -1317,15 +1301,9 @@ impl Game {
             .collect()
     }
 
-    /// 兵の数の表示（英雄がいれば「＋英雄の数」を添える。英雄は人口の外）
+    /// 兵の数の表示
     fn soldier_text(&self, n: u32, _pop: u32) -> String {
-        let pl = self.world.player;
-        let m = self.world.units.iter().filter(|u| u.alive && u.nation as usize == pl && u.hero != NONE).count();
-        if m > 0 {
-            format!("{}+{}", n, m)
-        } else {
-            format!("{}", n)
-        }
+        format!("{}", n)
     }
 
     /// 世論の説明（内訳つき）
@@ -1338,10 +1316,10 @@ impl Game {
             t!("民主制の国：革命は起きないが、世論が 50 を割るとストライキで生産が落ちる", "Democracy: no revolution, but below 50 strikes cut production", "民主制国家：不会革命，但舆论低于50时罢工会降低生产")
         };
         tf!(
-            "世論 {:.0}/100。{}\n今月の見込み：戦争の長期化 {:+.1}・損害の差 {:+.1}・軍事費 {:+.1}・食糧 {:+.1}・都市の得失 {:+.1}・英雄 {:+.1}\n損害の累計：失った兵力 {:.0}・与えた兵力 {:.0}　軍事費の比率 {:.0}%\n（クリックで戦況 F4）",
-            "Public opinion {:.0}/100. {}\nThis month: war weariness {:+.1}, casualty balance {:+.1}, military spending {:+.1}, food {:+.1}, cities won/lost {:+.1}, hero {:+.1}\nTotal losses: lost {:.0}, inflicted {:.0}   Military burden {:.0}%\n(Click for the War screen, F4)",
-            "舆论 {:.0}/100。{}\n本月预计：战争长期化 {:+.1}・损失差 {:+.1}・军费 {:+.1}・粮食 {:+.1}・城市得失 {:+.1}・英雄 {:+.1}\n累计损失：失去兵力 {:.0}・造成兵力 {:.0}　军费比率 {:.0}%\n（点击查看战况 F4）",
-            nat.opinion, gov, p.weariness, p.casualties, p.spending, p.food, p.cities, p.other, nat.lost_total, nat.inflicted_total, self.world.mil_burden(n) * 100.0
+            "世論 {:.0}/100。{}\n今月の見込み：戦争の長期化 {:+.1}・損害の差 {:+.1}・軍事費 {:+.1}・食糧 {:+.1}・都市の得失 {:+.1}\n損害の累計：失った兵力 {:.0}・与えた兵力 {:.0}　軍事費の比率 {:.0}%\n（クリックで戦況 F4）",
+            "Public opinion {:.0}/100. {}\nThis month: war weariness {:+.1}, casualty balance {:+.1}, military spending {:+.1}, food {:+.1}, cities won/lost {:+.1}\nTotal losses: lost {:.0}, inflicted {:.0}   Military burden {:.0}%\n(Click for the War screen, F4)",
+            "舆论 {:.0}/100。{}\n本月预计：战争长期化 {:+.1}・损失差 {:+.1}・军费 {:+.1}・粮食 {:+.1}・城市得失 {:+.1}\n累计损失：失去兵力 {:.0}・造成兵力 {:.0}　军费比率 {:.0}%\n（点击查看战况 F4）",
+            nat.opinion, gov, p.weariness, p.casualties, p.spending, p.food, p.cities, nat.lost_total, nat.inflicted_total, self.world.mil_burden(n) * 100.0
         )
     }
 
@@ -1942,7 +1920,6 @@ impl Game {
                 self.tip_until = 0.0;
                 if let Some(n) = self.title_sel.filter(|&n| n < NATIONS.len() && NATIONS[n].playable) {
                     self.world.player = n;
-                    self.world.heroic = true;
                     self.screen = Screen::Playing;
                     self.zoom = 22.0;
                     self.cam = self.world.nations[n].home;
@@ -1980,7 +1957,6 @@ impl Game {
                     self.place_tap = None;
                 } else if self.overlay_open() {
                     // 開いている一覧を閉じる（Esc と同じ）
-                    self.show_summon = false;
                     self.show_diplo = false;
                     self.show_help = false;
                     self.show_chron = false;
@@ -1997,7 +1973,6 @@ impl Game {
                     self.show_help = false;
                     self.show_chron = false;
                     self.show_market = false;
-                    self.show_summon = false;
                 }
             }
             Act::SaveSlot(s) => self.save_slot(s, false),
@@ -2021,7 +1996,6 @@ impl Game {
                 self.show_chron = false;
                 self.show_market = false;
                 self.show_save = false;
-                self.show_summon = false;
                 self.paused = false;
                 self.speed = 1;
                 self.fit_title_camera();
@@ -2221,28 +2195,7 @@ impl Game {
             Act::ChronPage(d) => {
                 self.chron_scroll = (self.chron_scroll as i32 + d).max(0) as usize;
             }
-            Act::Summon => {
-                if self.world.heroic {
-                    self.show_summon = !self.show_summon;
-                    self.show_diplo = false;
-                    self.show_help = false;
-                    self.show_chron = false;
-                    self.show_market = false;
-                    self.show_save = false;
-                }
-            }
-            Act::SummonHero(k) => {
-                let own = self.own_sel();
-                match self.world.summon_hero(pl, k, &own) {
-                    Ok(h) => {
-                        self.show_summon = false;
-                        self.sel = vec![h];
-                    }
-                    Err(e) => self.notice(e),
-                }
-            }
             Act::CloseOverlay => {
-                self.show_summon = false;
                 self.show_diplo = false;
                 self.show_help = false;
                 self.show_chron = false;
@@ -2314,7 +2267,6 @@ impl Game {
             self.buttons.clear();
             self.render_world_labels();
             if self.screen == Screen::Playing {
-                self.render_hero_labels();
                 self.render_build_queue();
             }
             // スマートフォン向け画面では、縦に収まらない一覧は指でなぞってスクロールする
@@ -2342,9 +2294,6 @@ impl Game {
                 }
                 if self.show_market {
                     self.scrolled(Self::render_status);
-                }
-                if self.show_summon {
-                    self.scrolled(Self::render_summon);
                 }
                 if self.show_save {
                     self.scrolled(Self::render_save);
@@ -2451,10 +2400,7 @@ impl Game {
             }
             let nc = wd.nations[u.nation as usize].color;
             let ue = era;
-            if u.hero != NONE {
-                g.circle(u.pos.x, u.pos.y + 0.15, 0.75, 16, [1.0, 0.85, 0.35, 0.35]);
-                g.ring(u.pos.x, u.pos.y + 0.15, 0.75, (2.0 * px).max(0.05), 16, [1.0, 0.85, 0.35, 0.95]);
-            } else if u.divine {
+            if u.divine {
                 g.circle(u.pos.x, u.pos.y + 0.12, 0.56, 16, [1.0, 0.94, 0.55, 0.28]);
                 g.ring(u.pos.x, u.pos.y + 0.12, 0.56, (1.8 * px).max(0.045), 16, [1.0, 0.92, 0.48, 0.92]);
             }
@@ -2593,7 +2539,6 @@ impl Game {
                 carry: Option<usize>,
                 flip_x: bool,
                 hp_frac: Option<f32>,
-                hero: u8,
                 divine: bool,
             },
         }
@@ -2754,7 +2699,6 @@ impl Game {
                             carry,
                             flip_x,
                             hp_frac,
-                            hero: u.hero,
                             divine: u.divine,
                         },
                     ));
@@ -2820,23 +2764,18 @@ impl Game {
                             self.gfx.fill_round(sx - bw * 0.5, by, sx - bw * 0.5 + bw * f, by + 3.5, 1.5, [1.0 - f, 0.22 + 0.75 * f, 0.15, 0.95]);
                         }
                     }
-                    WorldItem::Unit { sx, sy, kind, ue, nation, pw, nc, carry, flip_x, hp_frac, hero, divine } => {
-                        let is_hero = (hero as usize) < HEROES.len();
+                    WorldItem::Unit { sx, sy, kind, ue, nation, pw, nc, carry, flip_x, hp_frac, divine } => {
                         let big = matches!(kind, UnitKind::Cavalry | UnitKind::Artillery | UnitKind::Tank | UnitKind::Destroyer | UnitKind::Transport | UnitKind::Submarine);
-                        let scale = if is_hero {
-                            if big { 0.88 } else { 0.78 }
-                        } else if divine {
+                        let scale = if divine {
                             if big { 0.82 } else { 0.70 }
                         } else if big {
                             0.76
                         } else {
                             0.62
                         };
-                        let max_r = if is_hero { 27.0 } else if divine { 24.0 } else { 22.0 };
+                        let max_r = if divine { 24.0 } else { 22.0 };
                         let r = (z * scale * (1.0 + 0.04 * (pw - 1.0).min(4.0))).clamp(7.5, max_r);
-                        let u_bmp = if is_hero {
-                            self.art.hero_sprite(hero as usize, flip_x)
-                        } else if divine {
+                        let u_bmp = if divine {
                             self.art.divine_unit_sprite(kind, flip_x)
                         } else {
                             self.art.national_unit_sprite(kind, ue, nation, self.world.year_f(), flip_x)
@@ -3491,11 +3430,7 @@ impl Game {
         self.art.draw_inset_box(&self.gfx, ix, py + 6.0, ix + iw, h - 4.0);
         self.art.draw_corner_ornaments(&self.gfx, ix + 2.0, py + 8.0, ix + iw - 2.0, h - 6.0, 11.0);
         self.render_info(ix + 12.0, py + 12.0, iw - 24.0);
-        // 民を選んでいれば英雄召喚ボタン
-        if self.own_sel().iter().any(|&h| self.world.unit(h).map_or(false, |u| u.kind == UnitKind::Worker)) {
-            let tip = if self.world.hero_of(pl).is_some() { t!("英雄は一国に一人だけ。いまの英雄が倒れれば、また呼べる", "Only one hero per state. If yours falls, you can summon again", "每国只能有一位英雄。现有英雄倒下后可再次召唤") } else { t!("選んだ民を捧げ、自国の英雄を呼ぶ（英雄の能力＝捧げた民の能力の合計×1.5〜2.8）。他国出身の英雄は呼べない", "Dedicate the selected workers to call one of your state's heroes (hero power = their total power × 1.5–2.8). Heroes from other states cannot be called", "献上所选的民，召唤本国英雄（英雄能力＝所献民能力总和×1.5〜2.8）。不能召唤他国出身的英雄") };
-            self.add_button(ix + iw - 176.0, h - 58.0, ix + iw - 14.0, h - 14.0, t!("英雄召喚", "Summon Hero", "召唤英雄"), t!("民を捧げる", "dedicate workers", "献上民"), 'H' as u32, self.world.hero_of(pl).is_none(), Act::Summon, tip);
-        } else {
+        {
             // 兵を選んでいれば、兵器（戦車・軍艦）に割り当てるボタン
             let era_now = self.world.era;
             let crews = self.own_sel().iter().filter(|&&h| self.world.unit(h).map_or(false, World::can_crew)).count();
@@ -3544,7 +3479,7 @@ impl Game {
         let cx0 = w - 388.0;
         self.art.draw_inset_box(&self.gfx, cx0, py + 6.0, w - 4.0, h - 4.0);
         self.art.draw_corner_ornaments(&self.gfx, cx0 + 2.0, py + 8.0, w - 6.0, h - 6.0, 11.0);
-        if !self.show_diplo && !self.show_help && !self.show_chron && !self.show_market && !self.show_summon && !self.show_save {
+        if !self.show_diplo && !self.show_help && !self.show_chron && !self.show_market && !self.show_save {
             self.render_commands(w - 382.0, py + 12.0);
         }
 
@@ -3616,9 +3551,7 @@ impl Game {
             self.art.draw_inset_box(&self.gfx, px0 - 2.0, py0 - 2.0, px0 + psz + 2.0, py0 + psz + 2.0);
             self.gfx.fill_circle(px0 + psz * 0.5, py0 + psz * 0.74, psz * 0.34, c4(nc, 0.42));
             self.gfx.stroke_circle(px0 + psz * 0.5, py0 + psz * 0.74, psz * 0.34, 1.5, c4(nc, 0.9));
-            let sprite_bmp = if (u.hero as usize) < HEROES.len() {
-                self.art.hero_sprite(u.hero as usize, false)
-            } else if u.divine {
+            let sprite_bmp = if u.divine {
                 self.art.divine_unit_sprite(u.kind, false).or_else(|| self.art.national_unit_sprite(u.kind, era, u.nation as usize, self.world.year_f(), false))
             } else {
                 self.art.national_unit_sprite(u.kind, era, u.nation as usize, self.world.year_f(), false)
@@ -3634,10 +3567,7 @@ impl Game {
 
             let tx = x + 102.0;
             let tw = (wd - 102.0).max(100.0);
-            let title = if (u.hero as usize) < HEROES.len() {
-                let d = &HEROES[u.hero as usize];
-                tf!("英雄・{}（{}）【{}】", "Hero: {} ({}) [{}]", "英雄・{}（{}）【{}】", crate::lang::tx(d.name), crate::lang::tx(d.era), crate::lang::tx(n.name))
-            } else if u.divine {
+            let title = if u.divine {
                 tf!("天使・{}", "Angel {}", "天使・{}", u.kind.name(era))
             } else if let Some(sh) = &u.ship {
                 if sh.route != NONE {
@@ -3659,10 +3589,8 @@ impl Game {
                 self.order_text(u),
                 if u.carry > 0.5 { tf!("（{} {:.0}）", " ({} {:.0})", "（{} {:.0}）", res_name(u.carry_kind), u.carry) } else { String::new() }
             );
-            let desc = if (u.hero as usize) < HEROES.len() {
-                crate::lang::tx(HEROES[u.hero as usize].desc)
-            } else if u.divine {
-                t!("終わらぬ戦いを見かねて天より降りた天使。通常の兵では傷つけられず、英雄だけがこれを討てる。", "An angel sent down from heaven, weary of the endless war. Ordinary troops cannot hurt it; only heroes can.", "不忍见战争无休无止而从天而降的天使。普通士兵无法伤其分毫，唯有英雄能将其击败。")
+            let desc = if u.divine {
+                t!("終わらぬ戦いを見かねて天より降りた天使。どの兵にも傷つけられない。", "An angel sent down from heaven, weary of the endless war. No soldier can hurt it.", "不忍见战争无休无止而从天而降的天使。任何士兵都无法伤其分毫。")
             } else {
                 unit_desc(u.kind)
             };
@@ -3900,7 +3828,6 @@ impl Game {
         let afford = |c: [f32; 3]| res[0] >= c[0] && res[1] >= c[1] && res[2] >= c[2];
         let own = self.own_sel();
         let (n_workers, n_soldiers) = (self.world.nations[pl].workers, self.world.nations[pl].soldiers);
-        // 全軍への命令は英雄も含む
         let n_army = self.all_military().len();
         let n_trainable = n_soldiers;
         if !own.is_empty() {
@@ -4219,9 +4146,9 @@ impl Game {
         self.add_button(x0 + pw - 90.0, y0 + 10.0, x0 + pw - 14.0, y0 + 40.0, t!("閉じる", "Close", "关闭"), "", 0, true, Act::CloseOverlay, "");
         self.art.draw_inset_box(&self.gfx, x0 + 14.0, y0 + 46.0, x0 + pw - 14.0, y0 + ph - 14.0);
         let text = t!(
-            "■ 目的　1914年6月28日、サラエボ事件から大戦が始まる。同盟国以外の国（あなたと戦っている敵国）をすべて打ち破れば勝利。1919年6月28日（ヴェルサイユ条約の日）までに勝者が現れなければ、天使が降りて半年のうちにすべての都市を占領し、ゲームは終わる。時間は全ての国で共通に流れる（1か月＝100秒）。\n■ 開戦　七月危機の宣戦布告（オーストリア→セルビア、ドイツ→ロシア・フランス・ベルギー、イギリス→ドイツ……）は史実の日付に自動で起こる。オスマン帝国・イタリア・ブルガリア・ポルトガル・ルーマニア・ギリシャも史実の日付に参戦する。陣営どうしの和睦はない。中立国に宣戦すると、その国は敵の陣営に加わる。\n\n■ 資源　食糧（農場を耕す）・木材（森を伐採）・鉄（鉱山を採掘）。民が集めて都市へ運ぶ。都市からも税収がある。生産力も資源も開戦時がもっとも豊かで、戦争が長引くほど減っていく。\n■ 人口と徴兵　民と兵を合わせた人口には上限がある（敵の都市を奪えば増え、失えば減る）。兵は民を徴兵してつくる（兵営で兵を1人訓練するたびに民が1人減る）。軍を大きくするほど経済は細る。兵を動員解除して民に戻すこともできる（能力は2/3に目減り）。軍事ユニットは存在するだけで食糧を消費する（維持費）。\n■ 都市　都市は史実のものだけで、新しく築くことはできない。全ての都市を失った国は滅亡する。\n\n■ 世論　戦場での損失が相手より多い、人口に対して兵が多すぎる（軍事費が重い）、食糧が尽きた、都市を失った……といった状況が続くと世論が下がる。帝政の国（ドイツ・オーストリア・オスマン・ロシア・ブルガリア）では世論が 0 近くまで落ちると革命が起き、その国は降伏する（都市は敵国に明け渡される）。民主制の国では革命は起きないが、世論が 50 を割るとストライキで生産が落ちる。\n■ 兵種　歩兵（小銃）・砲兵（遠距離、歩兵と建物に強い）・騎兵（速い、砲兵に強い）はどの国も造れる。国ごとに特別な兵がある：戦車（英国1916年9月〜・フランス1917年4月〜・米国1918年〜）、突撃兵（ドイツ1916年7月〜）、山岳兵（イタリア・オーストリア・フランス・スイス）、Uボート（ドイツ・オーストリア）、駆逐艦（英・仏・伊・露・米）。戦車・Uボート・駆逐艦は兵器で、兵を選んで「〜に割り当て」（B／U）を押すと造れる（戦車は兵5人・Uボートは4人・駆逐艦は6人。戦車は自国の領内で、軍艦は自国の軍港のそばで）。兵は兵器に変わり、兵には戻せない。\n■ 海を渡る　海の向こうへ兵を動かすと、兵は最寄りの味方の港（無ければ海岸）で輸送船に乗り、目的地に近い港・海岸に上陸する。輸送船はUボートに沈められることがある。たとえばドイツから英国へ攻め込むには、兵を選んで英国の都市（ロンドンなど）を右クリックすればよい。兵は自国の港（青い印）へ歩いて輸送船に乗り、英国の海岸（橙の印）に上陸して都市を攻める。\n■ 植民地と船団　英国・フランスには植民地（カナダ・インド・アフリカ・アルジェリアなど）と米国から船で資源と民が届く。Uボートはこれを沈められ、駆逐艦は Uボートを狩る。\n■ 米国　米国は選べない。中立の米国の船を沈められるなど「妨害」を受けて参戦気運が 100 に達すると、協商国側で参戦する。ドイツは外交画面で「無制限潜水艦作戦」を始められる（米国の船も沈めるが、米国の参戦を招く）。\n■ 塹壕陣地　民だけを選ぶと「塹壕（R）」で築ける。近づく敵兵を撃ち、そばの味方の兵が受ける損害を3割減らす。数は都市2つごとに1つ（2〜10）。\n■ 英雄召喚　民を選んで「英雄召喚」（H）を押すと、選んだ民を捧げて自国出身の英雄（名将・撃墜王・艦長など）を呼べる。能力は捧げた民の能力の合計の1.5〜2.8倍。他国出身の英雄は呼べない。一国に一人だけ。英雄だけが天使を傷つけられ、英雄の近くの都市は最後の月まで天使にも奪われない。\n■ 史実の出来事　マルヌの奇跡・毒ガス・ルシタニア号・ヴェルダン・ソンム・ブルシーロフ攻勢・ツィンメルマン電報・春季攻勢・スペインかぜなどが史実の日付に起こる。記録は「戦史」（F3）で見られる。\n■ 国の特徴　国ごとに史実に基づく特徴がある（タイトル画面と戦史で確認できる）。\n■ 指揮中は時が止まる　自国の部隊を選ぶと時間が止まり、命令を出すと（または選択を解くと）再び進む。\n■ 戦場の霧　自国と同盟国の民・兵・建物の周囲しか見えない。都市の所在（どこにあり、どの国のものか）だけはすべて初めから分かっている。\n\n■ 操作\n　左クリック：選択　ドラッグ：範囲選択　ダブルクリック：同種を全選択　Shift：追加選択\n　右クリック：移動／攻撃／採集（森・鉱山・農場）／建設の手伝い　建物選択中の右クリック：集合地点\n　A：進軍（攻撃移動）　S：停止　T：訓練・教化　C：兵⇔民の転換　Q/W/E/R：建設・訓練　H：英雄召喚\n　Ctrl を押しながら建物を置く：建設の予約（続けて置ける）\n　Ctrl+数字：部隊登録　数字：部隊呼び出し　.：待機中の民　Home：首都へ\n　ホイール：拡大縮小　中ボタンドラッグ・矢印キー・画面端：スクロール　ミニマップクリック：移動\n　Space：一時停止　＋／－：速度　Esc：取り消し　F2：外交　F3：戦史　F4：戦況　F5：記録　F11：全画面　Ctrl＋＋／Ctrl＋−：文字の大きさ",
-            "■ Goal  The Great War begins with the Sarajevo assassination on June 28, 1914. Defeat every state outside your alliance that is at war with you to win. If no victor emerges by June 28, 1919 (the day of the Treaty of Versailles), the angels descend, take every city within half a year, and the game ends. Time flows the same for every state (1 month = 100 s).\n■ Outbreak  The July Crisis declarations (Austria on Serbia, Germany on Russia, France and Belgium, Britain on Germany...) happen automatically on their historical dates. The Ottoman Empire, Italy, Bulgaria, Portugal, Romania and Greece also enter on their historical dates. There is no peace between the alliances. Declare war on a neutral and it joins the enemy side.\n\n■ Resources  Food (farm), wood (cut forests), iron (mine). Workers carry them to your cities, which also pay tax. Production and resources are richest at the outbreak and decline the longer the war lasts.\n■ Population and conscription  Workers plus soldiers are limited (capturing enemy cities raises the limit; losing cities lowers it). Soldiers are drafted from workers: every soldier trained at a barracks takes one worker. The bigger the army, the thinner the economy. Soldiers can be demobilized back into workers (power drops to 2/3). Soldiers eat food just by existing (upkeep).\n■ Cities  Only the historical cities exist; no new ones can be founded. A state that loses all its cities falls.\n\n■ Public opinion  Opinion falls while you keep losing more than the enemy, keep too many soldiers for your population (heavy military spending), run out of food, or lose cities. In the empires (Germany, Austria-Hungary, the Ottomans, Russia, Bulgaria), opinion falling near 0 brings revolution and surrender (its cities go to the enemy). Democracies have no revolutions, but below 50 strikes cut production.\n■ Units  Every state can build infantry (rifles), artillery (long range, strong against infantry and buildings) and cavalry (fast, strong against artillery). Some have special units: tanks (Britain from Sept 1916, France from Apr 1917, the US from 1918), stormtroopers (Germany from July 1916), mountain troops (Italy, Austria-Hungary, France, Switzerland), U-boats (Germany, Austria-Hungary) and destroyers (Britain, France, Italy, Russia, the US). Tanks, U-boats and destroyers are weapons: select soldiers and press ‘Crew …’ (B / U) to make one (a tank takes 5 soldiers, a U-boat 4, a destroyer 6; tanks inside your territory, warships next to one of your naval bases). The soldiers become the weapon and can never be released.\n■ Crossing the sea  Order troops across the sea and they board transports at the nearest friendly port (or beach) and land at the port or beach nearest the goal. U-boats can sink transports. To invade Britain from Germany, for example, select soldiers and right-click a British city (London, say): they march to a home port (blue mark), sail, land on the British coast (orange mark) and attack the city.\n■ Colonies and convoys  Britain and France receive resources and workers by ship from their colonies (Canada, India, Africa, Algeria...) and from America. U-boats can sink them; destroyers hunt U-boats.\n■ America  The United States cannot be chosen. If it is obstructed — its neutral ships sunk, for example — its war fever rises, and at 100 it joins the Entente. Germany can begin unrestricted submarine warfare on the Diplomacy screen (sinking American ships too, at the risk of bringing America in).\n■ Trench lines  With only workers selected, press Trench (R) to dig one. It fires on approaching enemies and cuts damage to friendly troops beside it by 30%. One per two cities (2–10).\n■ Heroes  Select workers and press Summon Hero (H) to dedicate them and call one of your own state's heroes (generals, aces, captains...). Power is 1.5–2.8 times the workers' total power. Heroes from other states cannot be called. One per state. Only heroes can hurt the angels, and cities near a hero hold out against the angels until the final month.\n■ Historical events  The Miracle of the Marne, poison gas, the Lusitania, Verdun, the Somme, the Brusilov Offensive, the Zimmermann Telegram, the Spring Offensive, the Spanish flu and more happen on their dates. See them in the Chronicle (F3).\n■ National traits  Each state has historical traits (see the title screen and the Chronicle).\n■ Time stops while commanding  Selecting your own units stops time; it resumes when you give an order or clear the selection.\n■ Fog of war  You see only around your own and your allies' workers, soldiers and buildings. Every city (where it is and who holds it) is known from the start.\n\n■ Controls\n  Left click: select   Drag: box select   Double click: select all of a type   Shift: add to selection\n  Right click: move / attack / gather (forest, mine, farm) / help build   Right click with a building selected: rally point\n  A: attack-move   S: stop   T: train / educate   C: convert soldier ⇔ worker   Q/W/E/R: build / train   H: summon hero\n  Hold Ctrl while placing buildings: reserve builds (keep placing)\n  Ctrl+number: save group   Number: recall group   .: idle worker   Home: go to capital\n  Wheel: zoom   Middle drag / arrow keys / screen edge: scroll   Minimap click: jump\n  Space: pause   + / -: speed   Esc: cancel   F2: Diplomacy   F3: Chronicle   F4: War   F5: save / load   F11: fullscreen   Ctrl++ / Ctrl+−: text size",
-            "■ 目标　1914年6月28日，大战因萨拉热窝事件爆发。击败同盟以外的所有敌国（与你交战的国家）即获胜。若1919年6月28日（凡尔赛条约签订之日）前仍无胜者，天使将降临，在半年内占领所有城市，游戏结束。时间对所有国家同样流逝（1个月＝100秒）。\n■ 开战　七月危机中的宣战（奥地利→塞尔维亚、德国→俄国・法国・比利时、英国→德国……）会在史实日期自动发生。奥斯曼帝国、意大利、保加利亚、葡萄牙、罗马尼亚、希腊也会在史实日期参战。阵营之间不会议和。向中立国宣战会使其加入敌方阵营。\n\n■ 资源　粮食（耕种农场）、木材（伐木）、铁（采矿）。由民采集并运往城市，城市也会缴税。生产力与资源在开战时最为充足，战争越久越少。\n■ 人口与征兵　民与兵合计的人口有上限（夺取敌方城市则增加，失去城市则减少）。士兵由民征召：在兵营每训练一名士兵就减少一名民。军队越大，经济越单薄。士兵可复员为民（能力降为2/3）。军事单位只要存在就会消耗粮食（维持费）。\n■ 城市　只有史实中的城市，无法新建。失去全部城市的国家灭亡。\n\n■ 舆论　若在战场上的损失持续多于敌方、兵相对人口过多（军费沉重）、粮食耗尽、失去城市……舆论就会下降。帝制国家（德国、奥匈、奥斯曼、俄国、保加利亚）的舆论接近0时将爆发革命而投降（城市移交给敌国）。民主制国家不会革命，但舆论低于50时罢工会降低生产。\n■ 兵种　各国都能建造步兵（步枪）、炮兵（远程，克制步兵与建筑）、骑兵（迅速，克制炮兵）。部分国家拥有特殊兵种：坦克（英国1916年9月起、法国1917年4月起、美国1918年起）、突击兵（德国1916年7月起）、山地兵（意大利、奥匈、法国、瑞士）、U艇（德国、奥匈）、驱逐舰（英、法、意、俄、美）。坦克、U艇、驱逐舰是兵器：选中士兵后按“编入…”（B／U）即可建造（坦克需5名士兵、U艇4名、驱逐舰6名；坦克须在己方领土内，军舰须在己方军港附近）。士兵变为兵器，无法撤回。\n■ 渡海　命令士兵前往海的另一边时，他们会在最近的友方港口（若无则海岸）登上运输船，并在离目的地最近的港口或海岸登陆。运输船可能被U艇击沉。例如德国要进攻英国，只需选中士兵并右键点击英国的城市（如伦敦）：士兵会走到本国港口（蓝色标记）登上运输船，在英国海岸（橙色标记）登陆并进攻城市。\n■ 殖民地与船队　英国、法国会从殖民地（加拿大、印度、非洲、阿尔及利亚等）及美国经海路获得资源与民。U艇可将其击沉，驱逐舰可猎杀U艇。\n■ 美国　不能选择美国。若中立美国的船只被击沉等“妨碍”使其参战情绪达到100，美国将加入协约国参战。德国可在外交画面开始“无限制潜艇战”（连美国船只也击沉，但会招致美国参战）。\n■ 堑壕阵地　只选中民时，可用“堑壕（R）”修筑。射击靠近的敌兵，并使附近友军受到的伤害减少三成。每两座城市一座（2〜10）。\n■ 英雄召唤　选中民后按“召唤英雄”（H），即可献上所选的民召唤本国出身的英雄（名将、王牌飞行员、舰长等）。能力为所献民能力总和的1.5〜2.8倍。不能召唤他国出身的英雄。每国一位。只有英雄能伤及天使，英雄附近的城市直到最后一个月才会被天使夺走。\n■ 史实事件　马恩河奇迹、毒气、卢西塔尼亚号、凡尔登、索姆河、布鲁西洛夫攻势、齐默尔曼电报、春季攻势、西班牙流感等会在史实日期发生。可在“战史”（F3）中查看。\n■ 国家特点　各国拥有基于史实的特点（可在标题画面与战史中查看）。\n■ 指挥中时间停止　选中己方单位时时间停止，下达命令（或取消选择）后继续。\n■ 战争迷雾　只能看到己方及同盟国的民、兵、建筑周围。所有城市的位置（在哪里、属于哪国）从一开始就已知。\n\n■ 操作\n　左键：选择　拖动：框选　双击：选择全部同类　Shift：追加选择\n　右键：移动／攻击／采集（森林・矿山・农场）／协助建造　选中建筑时右键：集结点\n　A：进军（攻击移动）　S：停止　T：训练・教化　C：兵⇔民转换　Q/W/E/R：建造・训练　H：召唤英雄\n　按住 Ctrl 放置建筑：预约建造（可连续放置）\n　Ctrl+数字：编队　数字：调出编队　.：闲置的民　Home：回首都\n　滚轮：缩放　中键拖动・方向键・画面边缘：滚动　点击小地图：移动\n　Space：暂停　＋／－：速度　Esc：取消　F2：外交　F3：战史　F4：战况　F5：存档　F11：全屏　Ctrl＋＋／Ctrl＋−：文字大小"
+            "■ 目的　1914年6月28日、サラエボ事件から大戦が始まる。同盟国以外の国（あなたと戦っている敵国）をすべて打ち破れば勝利。1919年6月28日（ヴェルサイユ条約の日）までに勝者が現れなければ、天使が降りて半年のうちにすべての都市を占領し、ゲームは終わる。時間は全ての国で共通に流れる（1か月＝100秒）。\n■ 開戦　七月危機の宣戦布告（オーストリア→セルビア、ドイツ→ロシア・フランス・ベルギー、イギリス→ドイツ……）は史実の日付に自動で起こる。オスマン帝国・イタリア・ブルガリア・ポルトガル・ルーマニア・ギリシャも史実の日付に参戦する。陣営どうしの和睦はない。中立国に宣戦すると、その国は敵の陣営に加わる。\n\n■ 資源　食糧（農場を耕す）・木材（森を伐採）・鉄（鉱山を採掘）。民が集めて都市へ運ぶ。都市からも税収がある。生産力も資源も開戦時がもっとも豊かで、戦争が長引くほど減っていく。\n■ 人口と徴兵　民と兵を合わせた人口には上限がある（敵の都市を奪えば増え、失えば減る）。兵は民を徴兵してつくる（兵営で兵を1人訓練するたびに民が1人減る）。軍を大きくするほど経済は細る。兵を動員解除して民に戻すこともできる（能力は2/3に目減り）。軍事ユニットは存在するだけで食糧を消費する（維持費）。\n■ 都市　都市は史実のものだけで、新しく築くことはできない。全ての都市を失った国は滅亡する。\n\n■ 世論　戦場での損失が相手より多い、人口に対して兵が多すぎる（軍事費が重い）、食糧が尽きた、都市を失った……といった状況が続くと世論が下がる。帝政の国（ドイツ・オーストリア・オスマン・ロシア・ブルガリア）では世論が 0 近くまで落ちると革命が起き、その国は降伏する（都市は敵国に明け渡される）。民主制の国では革命は起きないが、世論が 50 を割るとストライキで生産が落ちる。\n■ 兵種　歩兵（小銃）・砲兵（遠距離、歩兵と建物に強い）・騎兵（速い、砲兵に強い）はどの国も造れる。国ごとに特別な兵がある：戦車（英国1916年9月〜・フランス1917年4月〜・米国1918年〜）、突撃兵（ドイツ1916年7月〜）、山岳兵（イタリア・オーストリア・フランス・スイス）、Uボート（ドイツ・オーストリア）、駆逐艦（英・仏・伊・露・米）。戦車・Uボート・駆逐艦は兵器で、兵を選んで「〜に割り当て」（B／U）を押すと造れる（戦車は兵5人・Uボートは4人・駆逐艦は6人。戦車は自国の領内で、軍艦は自国の軍港のそばで）。兵は兵器に変わり、兵には戻せない。\n■ 海を渡る　海の向こうへ兵を動かすと、兵は最寄りの味方の港（無ければ海岸）で輸送船に乗り、目的地に近い港・海岸に上陸する。輸送船はUボートに沈められることがある。たとえばドイツから英国へ攻め込むには、兵を選んで英国の都市（ロンドンなど）を右クリックすればよい。兵は自国の港（青い印）へ歩いて輸送船に乗り、英国の海岸（橙の印）に上陸して都市を攻める。\n■ 植民地と船団　英国・フランスには植民地（カナダ・インド・アフリカ・アルジェリアなど）と米国から船で資源と民が届く。Uボートはこれを沈められ、駆逐艦は Uボートを狩る。\n■ 米国　米国は選べない。中立の米国の船を沈められるなど「妨害」を受けて参戦気運が 100 に達すると、協商国側で参戦する。ドイツは外交画面で「無制限潜水艦作戦」を始められる（米国の船も沈めるが、米国の参戦を招く）。\n■ 塹壕陣地　民だけを選ぶと「塹壕（R）」で築ける。近づく敵兵を撃ち、そばの味方の兵が受ける損害を3割減らす。数は都市2つごとに1つ（2〜10）。\n■ 史実の出来事　マルヌの奇跡・毒ガス・ルシタニア号・ヴェルダン・ソンム・ブルシーロフ攻勢・ツィンメルマン電報・春季攻勢・スペインかぜなどが史実の日付に起こる。記録は「戦史」（F3）で見られる。\n■ 国の特徴　国ごとに史実に基づく特徴がある（タイトル画面と戦史で確認できる）。\n■ 指揮中は時が止まる　自国の部隊を選ぶと時間が止まり、命令を出すと（または選択を解くと）再び進む。\n■ 戦場の霧　自国と同盟国の民・兵・建物の周囲しか見えない。都市の所在（どこにあり、どの国のものか）だけはすべて初めから分かっている。\n\n■ 操作\n　左クリック：選択　ドラッグ：範囲選択　ダブルクリック：同種を全選択　Shift：追加選択\n　右クリック：移動／攻撃／採集（森・鉱山・農場）／建設の手伝い　建物選択中の右クリック：集合地点\n　A：進軍（攻撃移動）　S：停止　T：訓練・教化　C：兵⇔民の転換　Q/W/E/R：建設・訓練\n　Ctrl を押しながら建物を置く：建設の予約（続けて置ける）\n　Ctrl+数字：部隊登録　数字：部隊呼び出し　.：待機中の民　Home：首都へ\n　ホイール：拡大縮小　中ボタンドラッグ・矢印キー・画面端：スクロール　ミニマップクリック：移動\n　Space：一時停止　＋／－：速度　Esc：取り消し　F2：外交　F3：戦史　F4：戦況　F5：記録　F11：全画面　Ctrl＋＋／Ctrl＋−：文字の大きさ",
+            "■ Goal  The Great War begins with the Sarajevo assassination on June 28, 1914. Defeat every state outside your alliance that is at war with you to win. If no victor emerges by June 28, 1919 (the day of the Treaty of Versailles), the angels descend, take every city within half a year, and the game ends. Time flows the same for every state (1 month = 100 s).\n■ Outbreak  The July Crisis declarations (Austria on Serbia, Germany on Russia, France and Belgium, Britain on Germany...) happen automatically on their historical dates. The Ottoman Empire, Italy, Bulgaria, Portugal, Romania and Greece also enter on their historical dates. There is no peace between the alliances. Declare war on a neutral and it joins the enemy side.\n\n■ Resources  Food (farm), wood (cut forests), iron (mine). Workers carry them to your cities, which also pay tax. Production and resources are richest at the outbreak and decline the longer the war lasts.\n■ Population and conscription  Workers plus soldiers are limited (capturing enemy cities raises the limit; losing cities lowers it). Soldiers are drafted from workers: every soldier trained at a barracks takes one worker. The bigger the army, the thinner the economy. Soldiers can be demobilized back into workers (power drops to 2/3). Soldiers eat food just by existing (upkeep).\n■ Cities  Only the historical cities exist; no new ones can be founded. A state that loses all its cities falls.\n\n■ Public opinion  Opinion falls while you keep losing more than the enemy, keep too many soldiers for your population (heavy military spending), run out of food, or lose cities. In the empires (Germany, Austria-Hungary, the Ottomans, Russia, Bulgaria), opinion falling near 0 brings revolution and surrender (its cities go to the enemy). Democracies have no revolutions, but below 50 strikes cut production.\n■ Units  Every state can build infantry (rifles), artillery (long range, strong against infantry and buildings) and cavalry (fast, strong against artillery). Some have special units: tanks (Britain from Sept 1916, France from Apr 1917, the US from 1918), stormtroopers (Germany from July 1916), mountain troops (Italy, Austria-Hungary, France, Switzerland), U-boats (Germany, Austria-Hungary) and destroyers (Britain, France, Italy, Russia, the US). Tanks, U-boats and destroyers are weapons: select soldiers and press ‘Crew …’ (B / U) to make one (a tank takes 5 soldiers, a U-boat 4, a destroyer 6; tanks inside your territory, warships next to one of your naval bases). The soldiers become the weapon and can never be released.\n■ Crossing the sea  Order troops across the sea and they board transports at the nearest friendly port (or beach) and land at the port or beach nearest the goal. U-boats can sink transports. To invade Britain from Germany, for example, select soldiers and right-click a British city (London, say): they march to a home port (blue mark), sail, land on the British coast (orange mark) and attack the city.\n■ Colonies and convoys  Britain and France receive resources and workers by ship from their colonies (Canada, India, Africa, Algeria...) and from America. U-boats can sink them; destroyers hunt U-boats.\n■ America  The United States cannot be chosen. If it is obstructed — its neutral ships sunk, for example — its war fever rises, and at 100 it joins the Entente. Germany can begin unrestricted submarine warfare on the Diplomacy screen (sinking American ships too, at the risk of bringing America in).\n■ Trench lines  With only workers selected, press Trench (R) to dig one. It fires on approaching enemies and cuts damage to friendly troops beside it by 30%. One per two cities (2–10).\n■ Historical events  The Miracle of the Marne, poison gas, the Lusitania, Verdun, the Somme, the Brusilov Offensive, the Zimmermann Telegram, the Spring Offensive, the Spanish flu and more happen on their dates. See them in the Chronicle (F3).\n■ National traits  Each state has historical traits (see the title screen and the Chronicle).\n■ Time stops while commanding  Selecting your own units stops time; it resumes when you give an order or clear the selection.\n■ Fog of war  You see only around your own and your allies' workers, soldiers and buildings. Every city (where it is and who holds it) is known from the start.\n\n■ Controls\n  Left click: select   Drag: box select   Double click: select all of a type   Shift: add to selection\n  Right click: move / attack / gather (forest, mine, farm) / help build   Right click with a building selected: rally point\n  A: attack-move   S: stop   T: train / educate   C: convert soldier ⇔ worker   Q/W/E/R: build / train\n  Hold Ctrl while placing buildings: reserve builds (keep placing)\n  Ctrl+number: save group   Number: recall group   .: idle worker   Home: go to capital\n  Wheel: zoom   Middle drag / arrow keys / screen edge: scroll   Minimap click: jump\n  Space: pause   + / -: speed   Esc: cancel   F2: Diplomacy   F3: Chronicle   F4: War   F5: save / load   F11: fullscreen   Ctrl++ / Ctrl+−: text size",
+            "■ 目标　1914年6月28日，大战因萨拉热窝事件爆发。击败同盟以外的所有敌国（与你交战的国家）即获胜。若1919年6月28日（凡尔赛条约签订之日）前仍无胜者，天使将降临，在半年内占领所有城市，游戏结束。时间对所有国家同样流逝（1个月＝100秒）。\n■ 开战　七月危机中的宣战（奥地利→塞尔维亚、德国→俄国・法国・比利时、英国→德国……）会在史实日期自动发生。奥斯曼帝国、意大利、保加利亚、葡萄牙、罗马尼亚、希腊也会在史实日期参战。阵营之间不会议和。向中立国宣战会使其加入敌方阵营。\n\n■ 资源　粮食（耕种农场）、木材（伐木）、铁（采矿）。由民采集并运往城市，城市也会缴税。生产力与资源在开战时最为充足，战争越久越少。\n■ 人口与征兵　民与兵合计的人口有上限（夺取敌方城市则增加，失去城市则减少）。士兵由民征召：在兵营每训练一名士兵就减少一名民。军队越大，经济越单薄。士兵可复员为民（能力降为2/3）。军事单位只要存在就会消耗粮食（维持费）。\n■ 城市　只有史实中的城市，无法新建。失去全部城市的国家灭亡。\n\n■ 舆论　若在战场上的损失持续多于敌方、兵相对人口过多（军费沉重）、粮食耗尽、失去城市……舆论就会下降。帝制国家（德国、奥匈、奥斯曼、俄国、保加利亚）的舆论接近0时将爆发革命而投降（城市移交给敌国）。民主制国家不会革命，但舆论低于50时罢工会降低生产。\n■ 兵种　各国都能建造步兵（步枪）、炮兵（远程，克制步兵与建筑）、骑兵（迅速，克制炮兵）。部分国家拥有特殊兵种：坦克（英国1916年9月起、法国1917年4月起、美国1918年起）、突击兵（德国1916年7月起）、山地兵（意大利、奥匈、法国、瑞士）、U艇（德国、奥匈）、驱逐舰（英、法、意、俄、美）。坦克、U艇、驱逐舰是兵器：选中士兵后按“编入…”（B／U）即可建造（坦克需5名士兵、U艇4名、驱逐舰6名；坦克须在己方领土内，军舰须在己方军港附近）。士兵变为兵器，无法撤回。\n■ 渡海　命令士兵前往海的另一边时，他们会在最近的友方港口（若无则海岸）登上运输船，并在离目的地最近的港口或海岸登陆。运输船可能被U艇击沉。例如德国要进攻英国，只需选中士兵并右键点击英国的城市（如伦敦）：士兵会走到本国港口（蓝色标记）登上运输船，在英国海岸（橙色标记）登陆并进攻城市。\n■ 殖民地与船队　英国、法国会从殖民地（加拿大、印度、非洲、阿尔及利亚等）及美国经海路获得资源与民。U艇可将其击沉，驱逐舰可猎杀U艇。\n■ 美国　不能选择美国。若中立美国的船只被击沉等“妨碍”使其参战情绪达到100，美国将加入协约国参战。德国可在外交画面开始“无限制潜艇战”（连美国船只也击沉，但会招致美国参战）。\n■ 堑壕阵地　只选中民时，可用“堑壕（R）”修筑。射击靠近的敌兵，并使附近友军受到的伤害减少三成。每两座城市一座（2〜10）。\n■ 史实事件　马恩河奇迹、毒气、卢西塔尼亚号、凡尔登、索姆河、布鲁西洛夫攻势、齐默尔曼电报、春季攻势、西班牙流感等会在史实日期发生。可在“战史”（F3）中查看。\n■ 国家特点　各国拥有基于史实的特点（可在标题画面与战史中查看）。\n■ 指挥中时间停止　选中己方单位时时间停止，下达命令（或取消选择）后继续。\n■ 战争迷雾　只能看到己方及同盟国的民、兵、建筑周围。所有城市的位置（在哪里、属于哪国）从一开始就已知。\n\n■ 操作\n　左键：选择　拖动：框选　双击：选择全部同类　Shift：追加选择\n　右键：移动／攻击／采集（森林・矿山・农场）／协助建造　选中建筑时右键：集结点\n　A：进军（攻击移动）　S：停止　T：训练・教化　C：兵⇔民转换　Q/W/E/R：建造・训练\n　按住 Ctrl 放置建筑：预约建造（可连续放置）\n　Ctrl+数字：编队　数字：调出编队　.：闲置的民　Home：回首都\n　滚轮：缩放　中键拖动・方向键・画面边缘：滚动　点击小地图：移动\n　Space：暂停　＋／－：速度　Esc：取消　F2：外交　F3：战史　F4：战况　F5：存档　F11：全屏　Ctrl＋＋／Ctrl＋−：文字大小"
         );
         // 入りきらなければ小さい字にする
         let f = if self.gfx.measure_h(text, Font::Normal, pw - 48.0) > ph - 64.0 { Font::Small } else { Font::Normal };

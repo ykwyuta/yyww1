@@ -46,10 +46,6 @@ The United States cannot be chosen. If it is obstructed — its neutral ships su
 
 With only workers selected, press Trench (R) to dig one. It fires on approaching enemies and cuts damage to friendly troops beside it by 30%. One per two cities (2–10).
 
-## Heroes
-
-Select workers and press Summon Hero (H) to dedicate them and call one of your own state's heroes (generals, aces, captains...). Power is 1.5–2.8 times the workers' total power. Heroes from other states cannot be called. One per state. Only heroes can hurt the angels, and cities near a hero hold out against the angels until the final month.
-
 ## Historical events
 
 The Miracle of the Marne, poison gas, the Lusitania, Verdun, the Somme, the Brusilov Offensive, the Zimmermann Telegram, the Spring Offensive, the Spanish flu and more happen on their dates. See them in the Chronicle (F3).
@@ -70,7 +66,7 @@ You see only around your own and your allies' workers, soldiers and buildings. E
 
 - Left click: select   Drag: box select   Double click: select all of a type   Shift: add to selection
 - Right click: move / attack / gather (forest, mine, farm) / help build   Right click with a building selected: rally point
-- A: attack-move   S: stop   T: train / educate   C: convert soldier ⇔ worker   Q/W/E/R: build / train   H: summon hero
+- A: attack-move   S: stop   T: train / educate   C: convert soldier ⇔ worker   Q/W/E/R: build / train
 - Hold Ctrl while placing buildings: reserve builds (keep placing)
 - Ctrl+number: save group   Number: recall group   .: idle worker   Home: go to capital
 - Wheel: zoom   Middle drag / arrow keys / screen edge: scroll   Minimap click: jump

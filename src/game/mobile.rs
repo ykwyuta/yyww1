@@ -1,7 +1,7 @@
 //! スマートフォン向けの画面とタッチ操作
 //!
 //! 画面が小さいとき（ブラウザ側が「詰めた画面」を指示したとき）は、UI を約 1000×470 に収めて文字を大きくする。
-//! 縦に収まらない一覧（外交・戦況・戦史・ヘルプ・記録・英雄）は、高さ 720 の仮の画面に描いて指でなぞってスクロールする。
+//! 縦に収まらない一覧（外交・戦況・戦史・ヘルプ・記録）は、高さ 720 の仮の画面に描いて指でなぞってスクロールする。
 
 use super::*;
 
@@ -13,15 +13,13 @@ pub(super) const TOP_H_COMPACT: f32 = 50.0;
 impl Game {
     /// 一覧の画面を開いているか
     pub(super) fn overlay_open(&self) -> bool {
-        self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_summon || self.show_save
+        self.show_diplo || self.show_help || self.show_chron || self.show_market || self.show_save
     }
 
     /// いま開いている一覧の種類（変わったらスクロールを戻す）
     pub(super) fn overlay_key(&self) -> u8 {
         if self.show_save {
             6
-        } else if self.show_summon {
-            5
         } else if self.show_market {
             4
         } else if self.show_chron {

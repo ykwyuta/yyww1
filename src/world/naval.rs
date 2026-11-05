@@ -15,7 +15,6 @@ pub struct Cargo {
     pub power: f32,
     /// 体力の割合
     pub hp: f32,
-    pub hero: u8,
 }
 
 /// 渡海の予定
@@ -350,7 +349,7 @@ impl World {
             }
         };
         let u = &self.units[i];
-        let cargo = Cargo { kind: u.kind, power: u.power, hp: (u.hp / u.max_hp()).clamp(0.05, 1.0), hero: u.hero };
+        let cargo = Cargo { kind: u.kind, power: u.power, hp: (u.hp / u.max_hp()).clamp(0.05, 1.0) };
         let was_sel = u.selected;
         if let Some(sh) = self.units[j].ship.as_mut() {
             sh.cargo.push(cargo);
@@ -435,7 +434,6 @@ impl World {
                 let h = self.spawn_unit(ni, c.kind, p, c.power);
                 let u = self.unit_mut(h).unwrap();
                 u.hp = u.max_hp() * c.hp;
-                u.hero = c.hero;
                 u.selected = sel;
                 hs.push(h);
             }

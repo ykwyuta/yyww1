@@ -136,11 +136,16 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     let nsold = w.nations[n].soldiers + w.nations[n].q_soldiers;
 
     // ---- 民の訓練（人口の上限まで）
+    // 蓄えがあれば、空いている都市すべてで（足りない分だけ）民を育てる
     if pop < cap && res[0] >= 60.0 {
-        let free: Vec<Handle> = cities.iter().copied().filter(|&c| w.bld(c).map_or(false, |b| b.queue.is_empty())).collect();
-        if !free.is_empty() {
-            let c = free[a.rng.below(free.len() as u32) as usize];
-            let _ = w.enqueue(c, UnitKind::Worker);
+        let mut free: Vec<Handle> = cities.iter().copied().filter(|&c| w.bld(c).map_or(false, |b| b.queue.is_empty())).collect();
+        let want = if res[0] > 600.0 { (cap - pop) as usize } else { 1 };
+        for _ in 0..want.min(free.len()) {
+            let k = a.rng.below(free.len() as u32) as usize;
+            let c = free.swap_remove(k);
+            if w.enqueue(c, UnitKind::Worker).is_err() {
+                break;
+            }
         }
     }
 
@@ -298,17 +303,20 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     // ---- 軍の訓練：兵は民から徴兵する。軍事費が重くなりすぎない範囲で
     let nat = &w.nations[n];
     let res = nat.res;
+    // 攻め込まれている（都市を失った・首都のそばに敵がいる）ときは総動員
+    let invaded = nat.cities < cities0_of(w, n) || w.nations[n].capital.and_then(|h| w.bld(h)).map_or(false, |b| w.power_near(n, b.center(), 18.0).0 > 3.0);
     let share_goal = if at_war {
         // 世論が悪いときは控える。英国は徴兵制（1916年）までは志願兵だけ
         // ロシアは動員が遅い（1915年まで）
-        let base = if n == GBR && w.year_f() < ymd(1916, 1, 27) {
-            0.35
-        } else if n == RUS && w.year_f() < ymd(1915, 1, 1) {
+        let base: f32 = if n == GBR && w.year_f() < ymd(1916, 1, 27) {
             0.4
+        } else if n == RUS && w.year_f() < ymd(1915, 1, 1) {
+            0.45
         } else {
-            0.5
+            0.55
         };
-        if nat.opinion < 30.0 { base - 0.12 } else { base }
+        let base = if invaded { base.max(0.65) } else { base };
+        if nat.opinion < 30.0 { base - 0.1 } else { base }
     } else if nat.bloc == Bloc::Neutral {
         0.2
     } else {
@@ -318,11 +326,17 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     let share = (nat.soldiers + nat.q_soldiers) as f32 / pop_now;
     let food_ok = res[0] > 250.0 && nat.income[0] > nat.upkeep * 1.1;
     if share < share_goal && food_ok && nat.workers > 6 && !barracks.is_empty() {
-        let b = barracks[a.rng.below(barracks.len() as u32) as usize];
-        if w.bld(b).map_or(false, |x| x.queue.len() < 2) {
-            let k = pick_kind(w, n, &mut a.rng);
-            if w.enqueue(b, k).is_err() {
-                let _ = w.enqueue(b, UnitKind::Infantry);
+        // 兵営すべてで訓練を続ける（目標の割合に届くまで）
+        let mut short = ((share_goal - share) * pop_now).ceil() as i32;
+        for &b in barracks.iter() {
+            if short <= 0 || w.nations[n].workers <= 6 {
+                break;
+            }
+            if w.bld(b).map_or(false, |x| x.queue.len() < 2) {
+                let k = pick_kind(w, n, &mut a.rng);
+                if w.enqueue(b, k).is_ok() || w.enqueue(b, UnitKind::Infantry).is_ok() {
+                    short -= 1;
+                }
             }
         }
     }
@@ -377,10 +391,21 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     let soldiers: Vec<Mil> = soldiers.into_iter().filter(|s| !crewed.contains(&s.h)).collect();
 
     // ---- 能力の鍛錬（人口の上限に達したら質で補う）
+    // 蓄えが余っていれば何人も鍛える（使われない資源を兵の質に替える）
     let res = w.nations[n].res;
     if res[0] > 500.0 && res[1] > 400.0 && (pop >= cap || res[0] > 1500.0) && !soldiers.is_empty() {
-        if let Some(s) = soldiers.iter().filter(|s| s.kind != UnitKind::Transport).min_by(|x, y| x.power.partial_cmp(&y.power).unwrap()) {
-            let _ = w.upgrade_unit(s.h);
+        let rich = res[0].min(res[1]).min(res[2] * 2.0);
+        let times = if rich > 6000.0 { 6 } else if rich > 2000.0 { 3 } else { 1 };
+        let mut order: Vec<&Mil> = soldiers.iter().filter(|s| s.kind != UnitKind::Transport).collect();
+        order.sort_by(|x, y| x.power.partial_cmp(&y.power).unwrap());
+        let mut done = 0;
+        for s in order {
+            if done >= times {
+                break;
+            }
+            if w.upgrade_unit(s.h).is_ok() {
+                done += 1;
+            }
         }
     }
     if res[0] > 600.0 && res[1] > 400.0 && pop >= cap {
@@ -399,9 +424,12 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     let _ = nsold;
     command_army(w, n, a, &soldiers);
     command_navy(w, n, a, &ships);
+}
 
-    // ---- 英雄召喚（民を捧げるので最後に）
-    w.ai_summon(n, &mut a.rng);
+/// 開戦時の都市の数
+fn cities0_of(w: &World, n: usize) -> u32 {
+    let _ = w;
+    NATIONS[n].cities.len() as u32
 }
 
 fn assign_builder(w: &mut World, workers: &mut [(Handle, Order, V2)], bh: Handle) {
