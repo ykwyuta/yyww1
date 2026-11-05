@@ -124,6 +124,8 @@ impl Game {
             _ => 1,
         };
         self.paused = false;
+        // 記録した時に出ていた告知は、再開したときにもう出さない（いちいち閉じる手間をなくす）
+        self.world.clear_banners();
         self.fog = fog;
         // 古い記録でも、都市の所在はすべて分かるようにする
         self.reveal_cities();
@@ -182,7 +184,6 @@ impl Game {
         match self.load_bytes(data) {
             Ok(()) => {
                 let meta = self.save_meta();
-                self.notice(&tf!("記録を読み込んだ（{}）", "Loaded ({})", "已读取存档（{}）", meta));
                 let s = tf!("記録から再開した：{}", "Resumed from a save: {}", "从存档继续：{}", meta);
                 self.world.push_msg(s, [0.8, 0.95, 1.0]);
             }
