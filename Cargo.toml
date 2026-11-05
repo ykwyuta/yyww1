@@ -2,7 +2,7 @@
 name = "yyww1"
 version = "0.1.0"
 edition = "2021"
-description = "春秋戦国リアルタイムストラテジー（Rust → WebAssembly、ブラウザで動作）"
+description = "第一次世界大戦リアルタイムストラテジー（Rust → WebAssembly）"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

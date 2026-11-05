@@ -2,7 +2,7 @@
   "name": "yyww1",
   "private": true,
   "version": "0.2.0",
-  "description": "春秋戦国 — 中華統一への道（Rust → WebAssembly のブラウザ版）",
+  "description": "欧州大戦 1914–1919 — 第一次世界大戦リアルタイムストラテジー",
   "scripts": {
     "build": "bash build.sh",
     "deploy": "bash build.sh && npx wrangler deploy"

@@ -665,4 +665,7 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+    if "--legacy-overwrite" not in sys.argv:
+        raise SystemExit("Legacy generator would overwrite ImageGen assets. Use tools/import_generated_art.py for current art; pass --legacy-overwrite only to restore procedural art.")
     main()

@@ -1,4 +1,4 @@
-//! Age of Empires 風のUI背景テクスチャ・各種アイコン・肖像画の生成と描画
+//! 第一次大戦の司令部を基調としたUI・各国の軍装・建物の描画
 
 use crate::gfx::Gfx;
 use crate::rng::{fbm, hash2};
@@ -102,6 +102,36 @@ const RAW_UNIT_SPRITES: [&[u8]; N_KINDS] = [
     include_bytes!("../assets/units/transport.bgra"),
 ];
 
+const RAW_NATIONAL_INFANTRY: [&[u8]; 20] = [
+    include_bytes!("../assets/nations/ger_infantry.bgra"),
+    include_bytes!("../assets/nations/auh_infantry.bgra"),
+    include_bytes!("../assets/nations/ott_infantry.bgra"),
+    include_bytes!("../assets/nations/bul_infantry.bgra"),
+    include_bytes!("../assets/nations/gbr_infantry.bgra"),
+    include_bytes!("../assets/nations/fra_infantry.bgra"),
+    include_bytes!("../assets/nations/rus_infantry.bgra"),
+    include_bytes!("../assets/nations/srb_infantry.bgra"),
+    include_bytes!("../assets/nations/bel_infantry.bgra"),
+    include_bytes!("../assets/nations/ita_infantry.bgra"),
+    include_bytes!("../assets/nations/rou_infantry.bgra"),
+    include_bytes!("../assets/nations/gre_infantry.bgra"),
+    include_bytes!("../assets/nations/por_infantry.bgra"),
+    include_bytes!("../assets/nations/usa_infantry.bgra"),
+    include_bytes!("../assets/nations/ned_infantry.bgra"),
+    include_bytes!("../assets/nations/sui_infantry.bgra"),
+    include_bytes!("../assets/nations/esp_infantry.bgra"),
+    include_bytes!("../assets/nations/swe_infantry.bgra"),
+    include_bytes!("../assets/nations/nor_infantry.bgra"),
+    include_bytes!("../assets/nations/den_infantry.bgra"),
+];
+const RAW_LATE_INFANTRY: [&[u8]; 4] = [
+    include_bytes!("../assets/nations/ger_infantry_late.bgra"),
+    include_bytes!("../assets/nations/gbr_infantry_late.bgra"),
+    include_bytes!("../assets/nations/fra_infantry_late.bgra"),
+    include_bytes!("../assets/nations/bel_infantry_late.bgra"),
+];
+const RAW_FRENCH_TANK: &[u8] = include_bytes!("../assets/units/tank_french.bgra");
+
 const BLD_SPRITE_SZ: usize = 192;
 const N_BLD: usize = 6;
 const RAW_BLD_SPRITES: [&[u8]; N_BLD] = [
@@ -192,6 +222,10 @@ pub struct Art {
     pub btn_dis: Option<ID2D1Bitmap>,
     pub res_icons: [Option<ID2D1Bitmap>; 7],
     pub cmd_icons: [Option<ID2D1Bitmap>; N_CMD],
+    national_infantry: Vec<Option<ID2D1Bitmap>>,
+    national_infantry_flip: Vec<Option<ID2D1Bitmap>>,
+    french_tank: [Option<ID2D1Bitmap>; 2],
+    late_infantry: Vec<[Option<ID2D1Bitmap>; 2]>,
     pub unit_sprites: [Option<ID2D1Bitmap>; N_KINDS],
     pub unit_sprites_flip: [Option<ID2D1Bitmap>; N_KINDS],
     pub bld_sprites: [Option<ID2D1Bitmap>; N_BLD],
@@ -511,180 +545,53 @@ fn lerp3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]
 }
 
-/// Age of Empires 風の石彫・青銅器レリーフ背景テクスチャ
+// Field headquarters: ink-blue enamel, drafting grids and restrained brass rules.
 fn gen_hud_stone(w: usize, h: usize) -> Vec<u32> {
     let mut cv = Canvas::new(w, h);
     for y in 0..h {
-        let fy = y as f32 / h as f32;
         for x in 0..w {
-            let fx = x as f32 / w as f32;
-            let n1 = fbm(x as f32 * 0.06, y as f32 * 0.06, 101, 4);
-            let n2 = fbm(x as f32 * 0.18, y as f32 * 0.18, 202, 3);
-            let grain = (n1 - 0.5) * 0.09 + (n2 - 0.5) * 0.05;
-            // 石材の目地
-            let bx = (x + (y / 32) * 48) % 96;
-            let by = y % 32;
-            let seam = if bx == 0 || by == 0 {
-                -0.045
-            } else if bx == 1 || by == 1 {
-                0.03
-            } else {
-                0.0
-            };
-            let vig = 1.0 - ((fx - 0.5).powi(2) * 0.25 + (fy - 0.5).powi(2) * 0.45);
-            let mut base = [0.13 + grain + seam, 0.105 + grain * 0.85 + seam, 0.08 + grain * 0.7 + seam];
-            // 上部と下部の青銅色の縁取りグラデーション
-            if y < 10 {
-                let t = 1.0 - y as f32 / 10.0;
-                base = lerp3(base, [0.32, 0.25, 0.14], t * 0.65);
-            }
-            // 雷紋（古代中国の幾何学文様）の透かし彫り
-            if (4..16).contains(&y) {
-                let rx = x % 16;
-                let ry = y - 4;
-                let pat = (ry == 0 || ry == 11 || rx == 0 || rx == 15)
-                    || ((2..=9).contains(&ry) && (rx == 2 || rx == 13))
-                    || ((ry == 2 || ry == 9) && (2..=13).contains(&rx))
-                    || ((4..=7).contains(&ry) && (rx == 4 || rx == 11));
-                if pat {
-                    base = [base[0] + 0.055, base[1] + 0.042, base[2] + 0.02];
-                }
-            }
-            cv.px[y * w + x] = [(base[0] * vig).clamp(0.0, 1.0), (base[1] * vig).clamp(0.0, 1.0), (base[2] * vig).clamp(0.0, 1.0), 0.97];
+            let grain = (hash2(x as i32, y as i32, 101) - 0.5) * 0.018;
+            let grid = if x % 32 == 0 || y % 32 == 0 { 0.012 } else { 0.0 };
+            cv.px[y * w + x] = [0.075 + grain + grid, 0.115 + grain + grid, 0.135 + grain + grid, 0.98];
         }
     }
     cv.to_bgra_premul()
 }
 
-/// 竹簡・黒漆木目調の内部パネル背景テクスチャ
 fn gen_panel_wood(w: usize, h: usize) -> Vec<u32> {
     let mut cv = Canvas::new(w, h);
     for y in 0..h {
-        let fy = y as f32 / h as f32;
         for x in 0..w {
-            let fx = x as f32 / w as f32;
-            let wood = fbm(x as f32 * 0.03, y as f32 * 0.22, 303, 4);
-            let fine = fbm(x as f32 * 0.25, y as f32 * 0.05, 404, 2);
-            let strip = x % 24;
-            let groove = if strip == 0 {
-                -0.04
-            } else if strip == 1 {
-                0.025
-            } else {
-                0.0
-            };
-            let v = (wood - 0.5) * 0.08 + (fine - 0.5) * 0.03 + groove;
-            let vig = 1.0 - ((fx - 0.5).powi(2) + (fy - 0.5).powi(2)) * 0.35;
-            let r = (0.16 + v) * vig;
-            let g = (0.125 + v * 0.85) * vig;
-            let b = (0.09 + v * 0.65) * vig;
-            cv.px[y * w + x] = [r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0), 0.95];
+            let grain = (hash2(x as i32, y as i32, 303) - 0.5) * 0.012;
+            cv.px[y * w + x] = [0.10 + grain, 0.145 + grain, 0.16 + grain, 0.98];
         }
     }
     cv.to_bgra_premul()
 }
 
-/// Age of Empires 風のベベル付きコマンドボタン背景
 fn gen_button_tex(w: usize, h: usize, state: u8) -> Vec<u32> {
     let mut cv = Canvas::new(w, h);
-    let (top_c, bot_c, border_hi, border_lo) = match state {
-        1 => ([0.52, 0.41, 0.23], [0.30, 0.22, 0.12], [0.98, 0.86, 0.52], [0.45, 0.34, 0.18]), // hover
-        2 => ([0.20, 0.18, 0.16], [0.13, 0.12, 0.10], [0.35, 0.32, 0.28], [0.15, 0.13, 0.11]), // disabled
-        _ => ([0.36, 0.28, 0.17], [0.19, 0.14, 0.09], [0.82, 0.68, 0.38], [0.32, 0.24, 0.13]), // normal
+    let (base, rule) = match state {
+        1 => ([0.24, 0.32, 0.34, 1.0], [0.80, 0.73, 0.53, 1.0]),
+        2 => ([0.13, 0.16, 0.17, 1.0], [0.27, 0.31, 0.31, 1.0]),
+        _ => ([0.15, 0.22, 0.24, 1.0], [0.48, 0.56, 0.55, 1.0]),
     };
-    for y in 0..h {
-        let ty = y as f32 / (h - 1).max(1) as f32;
-        for x in 0..w {
-            let n = (fbm(x as f32 * 0.12, y as f32 * 0.2, 555, 3) - 0.5) * 0.06;
-            let sheen = if ty < 0.42 { (0.42 - ty) * 0.18 } else { 0.0 };
-            let mut c = lerp3(top_c, bot_c, ty);
-            c = [c[0] + n + sheen, c[1] + n * 0.9 + sheen * 0.9, c[2] + n * 0.7 + sheen * 0.7];
-            let edge_l = x <= 1;
-            let edge_t = y <= 1;
-            let edge_r = x >= w - 2;
-            let edge_b = y >= h - 2;
-            if edge_t || edge_l {
-                c = border_hi;
-            } else if edge_b || edge_r {
-                c = border_lo;
-            } else if x == 2 || y == 2 || x == w - 3 || y == h - 3 {
-                c = [c[0] * 0.65, c[1] * 0.65, c[2] * 0.65];
-            }
-            cv.px[y * w + x] = [c[0].clamp(0.0, 1.0), c[1].clamp(0.0, 1.0), c[2].clamp(0.0, 1.0), 0.96];
-        }
-    }
-    // 四隅のリベット飾り
-    let rc = if state == 2 { [0.45, 0.42, 0.38, 1.0] } else { [0.95, 0.82, 0.48, 1.0] };
-    for (cx, cy) in [(5.5, 5.5), (w as f32 - 5.5, 5.5), (5.5, h as f32 - 5.5), (w as f32 - 5.5, h as f32 - 5.5)] {
-        cv.circle(cx, cy, 1.8, rc);
-    }
+    cv.round_rect(0.0, 0.0, w as f32, h as f32, 0.0, rule);
+    cv.round_rect(1.0, 1.0, w as f32 - 1.0, h as f32 - 1.0, 0.0, base);
     cv.to_bgra_premul()
 }
 
-/// タイトル画面用の紋章バナー（交差する小銃・軍旗・勲章）
-/// 題字の飾りの扁額の内寸（幅）。wide は英語の題字用
-pub const TITLE_PLAQUE_W: f32 = 180.0;
+pub const TITLE_PLAQUE_W: f32 = 292.0;
 pub const TITLE_PLAQUE_W_WIDE: f32 = 292.0;
-
-fn gen_title_crest(wide: bool) -> Vec<u32> {
-    let (w, h) = (340, 124);
-    let mut cv = Canvas::new(w, h);
-    let (cx, cy) = (w as f32 * 0.5, h as f32 * 0.52);
-
-    // 背後の放射光グラデーション
-    for y in 0..h {
-        for x in 0..w {
-            let dx = (x as f32 - cx) / 162.0;
-            let dy = (y as f32 - cy) / 58.0;
-            let d = (dx * dx + dy * dy).sqrt();
-            if d < 1.0 {
-                let ang = (y as f32 - cy).atan2(x as f32 - cx);
-                let rays = 0.5 + 0.5 * (ang * 18.0).cos();
-                let a = (1.0 - d).powf(1.4) * (0.42 + 0.22 * rays);
-                let c = lerp3([0.92, 0.72, 0.28], [0.38, 0.14, 0.06], d);
-                cv.blend(x as i32, y as i32, [c[0], c[1], c[2], a]);
-            }
-        }
+fn gen_title_crest(_wide: bool) -> Vec<u32> {
+    let mut cv = Canvas::new(340, 124);
+    let rule = [0.69, 0.66, 0.49, 0.9];
+    cv.capsule(26.0, 12.0, 314.0, 12.0, 0.6, rule);
+    cv.capsule(26.0, 112.0, 314.0, 112.0, 0.6, rule);
+    for x in [26.0, 314.0] {
+        cv.capsule(x, 8.0, x, 16.0, 0.6, rule);
+        cv.capsule(x, 108.0, x, 116.0, 0.6, rule);
     }
-
-    let wood = [0.48, 0.26, 0.14, 1.0];
-    let gold = [0.95, 0.80, 0.38, 1.0];
-    let bronze = [0.78, 0.62, 0.32, 1.0];
-    let shine = [1.0, 0.94, 0.72, 1.0];
-
-    // 左右に交差する小銃（銃剣つき）
-    cv.capsule(cx - 148.0, cy + 40.0, cx + 142.0, cy - 42.0, 3.0, wood);
-    cv.capsule(cx + 148.0, cy + 40.0, cx - 142.0, cy - 42.0, 3.0, wood);
-    cv.poly(&[(cx - 142.0, cy - 42.0), (cx - 122.0, cy - 56.0), (cx - 138.0, cy - 38.0)], shine);
-    cv.poly(&[(cx + 142.0, cy - 42.0), (cx + 122.0, cy - 56.0), (cx + 138.0, cy - 38.0)], shine);
-
-    // 扁額の半幅（内側）。幅広のときは両脇の飾りを扁額が覆うので描かない
-    let hw = if wide { TITLE_PLAQUE_W_WIDE * 0.5 } else { TITLE_PLAQUE_W * 0.5 };
-    if !wide {
-        // 左右の軍旗（深紅＋金縁）
-        let crimson = [0.42, 0.10, 0.10, 0.95];
-        let crimson_hi = [0.58, 0.16, 0.14, 0.95];
-        cv.poly(&[(cx - 138.0, cy - 26.0), (cx - 82.0, cy - 16.0), (cx - 90.0, cy + 26.0), (cx - 146.0, cy + 16.0)], crimson);
-        cv.poly(&[(cx - 134.0, cy - 20.0), (cx - 88.0, cy - 12.0), (cx - 94.0, cy + 20.0), (cx - 140.0, cy + 11.0)], crimson_hi);
-        cv.poly(&[(cx + 138.0, cy - 26.0), (cx + 82.0, cy - 16.0), (cx + 90.0, cy + 26.0), (cx + 146.0, cy + 16.0)], crimson);
-        cv.poly(&[(cx + 134.0, cy - 20.0), (cx + 88.0, cy - 12.0), (cx + 94.0, cy + 20.0), (cx + 140.0, cy + 11.0)], crimson_hi);
-        // 左右の勲章（金の十字と月桂樹）
-        for &ox in &[cx - 114.0, cx + 114.0] {
-            cv.circle(ox, cy + 2.0, 14.0, [0.12, 0.09, 0.06, 0.92]);
-            cv.ring(ox, cy + 2.0, 13.5, 2.0, gold);
-            cv.poly(&[(ox - 3.0, cy - 9.0), (ox + 3.0, cy - 9.0), (ox + 3.0, cy - 1.0), (ox + 9.0, cy - 1.0), (ox + 9.0, cy + 5.0), (ox + 3.0, cy + 5.0), (ox + 3.0, cy + 13.0), (ox - 3.0, cy + 13.0), (ox - 3.0, cy + 5.0), (ox - 9.0, cy + 5.0), (ox - 9.0, cy - 1.0), (ox - 3.0, cy - 1.0)], gold);
-            cv.circle(ox, cy + 2.0, 2.6, bronze);
-        }
-    }
-
-    // 中央の黒漆・金縁扁額（題字がくっきり映える台座）
-    cv.round_rect(cx - hw - 6.0, cy - 38.0, cx + hw + 6.0, cy + 42.0, 10.0, [0.07, 0.05, 0.04, 0.94]);
-    cv.round_rect(cx - hw - 3.0, cy - 35.0, cx + hw + 3.0, cy + 39.0, 8.0, [0.85, 0.70, 0.34, 0.95]);
-    cv.round_rect(cx - hw, cy - 32.0, cx + hw, cy + 36.0, 6.0, [0.14, 0.09, 0.07, 0.98]);
-    // 扁額上部の星章
-    cv.circle(cx, cy - 36.0, 9.0, gold);
-    cv.circle(cx, cy - 36.0, 5.5, [0.62, 0.14, 0.12, 1.0]);
-
     cv.to_bgra_premul()
 }
 
@@ -705,22 +612,12 @@ fn icon_backdrop(cv: &mut Canvas, top: [f32; 3], bot: [f32; 3], glow: [f32; 3]) 
 }
 
 fn icon_frame(cv: &mut Canvas) {
-    let w = cv.w as f32;
-    let h = cv.h as f32;
-    // 内側の影
-    cv.round_rect(0.0, 0.0, w, 4.0, 0.0, [0.98, 0.86, 0.52, 0.9]);
-    cv.round_rect(0.0, 0.0, 4.0, h, 0.0, [0.92, 0.78, 0.42, 0.9]);
-    cv.round_rect(0.0, h - 4.0, w, h, 0.0, [0.38, 0.28, 0.14, 0.95]);
-    cv.round_rect(w - 4.0, 0.0, w, h, 0.0, [0.45, 0.34, 0.16, 0.95]);
-    // 内枠の黒線
-    cv.capsule(4.0, 4.0, w - 4.0, 4.0, 0.9, [0.08, 0.06, 0.04, 0.85]);
-    cv.capsule(4.0, h - 4.0, w - 4.0, h - 4.0, 0.9, [0.08, 0.06, 0.04, 0.85]);
-    cv.capsule(4.0, 4.0, 4.0, h - 4.0, 0.9, [0.08, 0.06, 0.04, 0.85]);
-    cv.capsule(w - 4.0, 4.0, w - 4.0, h - 4.0, 0.9, [0.08, 0.06, 0.04, 0.85]);
-    // 四隅の金鋲
-    for (cx, cy) in [(4.5, 4.5), (w - 4.5, 4.5), (4.5, h - 4.5), (w - 4.5, h - 4.5)] {
-        cv.circle(cx, cy, 2.2, [1.0, 0.92, 0.62, 1.0]);
-    }
+    let (w, h) = (cv.w as f32, cv.h as f32);
+    let c = [0.55, 0.62, 0.60, 0.9];
+    cv.capsule(1.0, 1.0, w - 1.0, 1.0, 0.5, c);
+    cv.capsule(1.0, h - 1.0, w - 1.0, h - 1.0, 0.5, c);
+    cv.capsule(1.0, 1.0, 1.0, h - 1.0, 0.5, c);
+    cv.capsule(w - 1.0, 1.0, w - 1.0, h - 1.0, 0.5, c);
 }
 
 /// 上部バー用の資源・ステータスアイコン（48x48、背景透過の立体エンブレム）
@@ -802,13 +699,12 @@ fn gen_res_icon(kind: ResIcon) -> Vec<u32> {
             cv.circle(24.0, 28.0, 2.8, [1.0, 0.88, 0.40, 1.0]);
         }
         ResIcon::Era => {
-            // 竹簡（ちくかん）の巻物
-            for k in 0..5 {
-                let x = 13.0 + k as f32 * 5.2;
-                cv.round_rect(x, 12.0, x + 4.2, 36.0, 1.2, [0.86, 0.72, 0.44, 1.0]);
+            // Printed staff calendar, replacing bamboo slips.
+            cv.round_rect(12.0, 10.0, 36.0, 38.0, 1.0, [0.86, 0.85, 0.75, 1.0]);
+            cv.round_rect(12.0, 10.0, 36.0, 17.0, 0.0, [0.46, 0.22, 0.20, 1.0]);
+            for y in [22.0, 28.0, 34.0] {
+                cv.capsule(17.0, y, 31.0, y, 0.7, [0.22, 0.29, 0.30, 1.0]);
             }
-            cv.capsule(11.0, 17.0, 37.0, 17.0, 1.4, [0.82, 0.20, 0.16, 1.0]);
-            cv.capsule(11.0, 31.0, 37.0, 31.0, 1.4, [0.82, 0.20, 0.16, 1.0]);
         }
     }
     cv.to_bgra_premul()
@@ -860,44 +756,27 @@ fn gen_cmd_icon(kind: CmdIcon) -> Vec<u32> {
             cv.blit_bld_sprite(5, (2.0, 2.0, 62.0, 62.0), (0.0, 0.0, 1.0, 1.0));
         }
         CmdIcon::Upgrade => {
-            icon_backdrop(&mut cv, [0.16, 0.28, 0.48], [0.08, 0.12, 0.24], [0.45, 0.68, 0.95]);
-            // 上昇シェブロン（金色の矢印）
-            for &yo in &[24.0, 36.0] {
-                cv.capsule(14.0, yo + 10.0, 32.0, yo - 4.0, 3.0, [1.0, 0.82, 0.30, 0.85]);
-                cv.capsule(32.0, yo - 4.0, 50.0, yo + 10.0, 3.0, [1.0, 0.82, 0.30, 0.85]);
+            icon_backdrop(&mut cv, [0.18,0.25,0.27], [0.08,0.13,0.15], [0.40,0.46,0.43]);
+            for y in [20.0, 32.0, 44.0] {
+                cv.capsule(16.0,y+8.0,32.0,y-4.0,2.0,[0.85,0.81,0.63,1.0]);
+                cv.capsule(32.0,y-4.0,48.0,y+8.0,2.0,[0.85,0.81,0.63,1.0]);
             }
-            // 中央に輝く青銅の宝剣
-            cv.capsule(32.0, 56.0, 32.0, 42.0, 2.8, [0.65, 0.38, 0.18, 1.0]);
-            cv.capsule(22.0, 42.0, 42.0, 42.0, 2.8, [0.95, 0.80, 0.36, 1.0]);
-            cv.poly(&[(28.0, 41.0), (32.0, 8.0), (36.0, 41.0)], [0.92, 0.96, 1.0, 1.0]);
-            cv.poly(&[(32.0, 8.0), (36.0, 41.0), (32.0, 41.0)], [0.68, 0.82, 0.95, 1.0]);
         }
         CmdIcon::Convert => {
-            icon_backdrop(&mut cv, [0.24, 0.22, 0.16], [0.12, 0.10, 0.08], [0.55, 0.50, 0.32]);
-            // 循環する金の矢印リング
-            cv.ring(32.0, 32.0, 20.0, 3.2, [0.95, 0.78, 0.32, 0.9]);
-            // 左半分に鍬、右半分に戈
-            cv.capsule(16.0, 48.0, 28.0, 16.0, 2.4, [0.62, 0.42, 0.22, 1.0]);
-            cv.poly(&[(22.0, 14.0), (32.0, 18.0), (28.0, 24.0)], [0.82, 0.86, 0.90, 1.0]);
-            cv.capsule(44.0, 48.0, 38.0, 14.0, 2.4, [0.68, 0.32, 0.18, 1.0]);
-            cv.poly(&[(38.0, 16.0), (52.0, 22.0), (39.0, 26.0)], [0.98, 0.84, 0.42, 1.0]);
+            icon_backdrop(&mut cv,[0.18,0.25,0.27],[0.08,0.13,0.15],[0.40,0.46,0.43]);
+            cv.blit_unit_sprite(0,(2.0,8.0,30.0,58.0),(0.0,0.0,1.0,1.0),None);
+            cv.blit_unit_sprite(1,(34.0,8.0,62.0,58.0),(0.0,0.0,1.0,1.0),None);
+            cv.capsule(22.0,30.0,42.0,30.0,1.5,[0.87,0.84,0.68,1.0]);
+            cv.poly(&[(42.0,30.0),(35.0,25.0),(35.0,35.0)],[0.87,0.84,0.68,1.0]);
         }
         CmdIcon::Stop => {
-            icon_backdrop(&mut cv, [0.22, 0.20, 0.22], [0.10, 0.09, 0.10], [0.45, 0.42, 0.45]);
-            // 堅牢な大盾
-            cv.round_rect(14.0, 10.0, 50.0, 54.0, 8.0, [0.78, 0.64, 0.32, 1.0]);
-            cv.round_rect(17.0, 13.0, 47.0, 51.0, 6.0, [0.58, 0.18, 0.14, 1.0]);
-            cv.circle(32.0, 32.0, 8.5, [0.95, 0.82, 0.42, 1.0]);
-            cv.ring(32.0, 32.0, 12.0, 1.8, [0.85, 0.70, 0.34, 1.0]);
+            icon_backdrop(&mut cv,[0.24,0.20,0.20],[0.10,0.12,0.13],[0.40,0.37,0.33]);
+            cv.round_rect(17.0,17.0,47.0,47.0,0.0,[0.79,0.43,0.35,1.0]);
         }
         CmdIcon::AttackMove => {
-            icon_backdrop(&mut cv, [0.45, 0.14, 0.10], [0.18, 0.06, 0.04], [0.92, 0.38, 0.18]);
-            // 突撃の軌跡と剣
-            cv.poly(&[(10.0, 52.0), (54.0, 12.0), (42.0, 52.0)], [1.0, 0.55, 0.18, 0.55]);
-            cv.capsule(12.0, 52.0, 24.0, 40.0, 3.0, [0.62, 0.36, 0.16, 1.0]);
-            cv.capsule(18.0, 34.0, 30.0, 46.0, 2.8, [0.95, 0.80, 0.35, 1.0]);
-            cv.poly(&[(22.0, 38.0), (54.0, 10.0), (26.0, 42.0)], [1.0, 0.96, 0.82, 1.0]);
-            cv.poly(&[(54.0, 10.0), (38.0, 12.0), (52.0, 26.0)], [1.0, 0.85, 0.38, 1.0]);
+            icon_backdrop(&mut cv,[0.26,0.21,0.19],[0.12,0.13,0.13],[0.49,0.37,0.29]);
+            cv.capsule(14.0,49.0,47.0,16.0,3.0,[0.83,0.70,0.50,1.0]);
+            cv.poly(&[(50.0,12.0),(31.0,17.0),(46.0,32.0)],[0.83,0.70,0.50,1.0]);
         }
         CmdIcon::Demolish => {
             icon_backdrop(&mut cv, [0.32, 0.16, 0.12], [0.14, 0.08, 0.06], [0.85, 0.36, 0.16]);
@@ -949,26 +828,14 @@ fn gen_cmd_icon(kind: CmdIcon) -> Vec<u32> {
             cv.capsule(34.0, 12.0, 54.0, 32.0, 2.8, [0.98, 0.90, 0.68, 1.0]);
         }
         CmdIcon::Defend => {
-            icon_backdrop(&mut cv, [0.16, 0.28, 0.46], [0.08, 0.14, 0.24], [0.42, 0.68, 0.95]);
-            // 城壁の胸壁と大型の青い守護盾
-            for k in 0..5 {
-                let x = 10.0 + k as f32 * 9.0;
-                cv.round_rect(x, 12.0, x + 6.0, 22.0, 1.0, [0.68, 0.62, 0.52, 1.0]);
-            }
-            cv.round_rect(8.0, 18.0, 56.0, 28.0, 1.5, [0.58, 0.52, 0.44, 1.0]);
-            cv.poly(&[(16.0, 22.0), (48.0, 22.0), (44.0, 46.0), (32.0, 58.0), (20.0, 46.0)], [0.95, 0.80, 0.36, 1.0]);
-            cv.poly(&[(19.0, 25.0), (45.0, 25.0), (41.0, 44.0), (32.0, 54.0), (23.0, 44.0)], [0.18, 0.38, 0.68, 1.0]);
-            cv.circle(32.0, 38.0, 6.0, [1.0, 0.88, 0.45, 1.0]);
+            icon_backdrop(&mut cv,[0.18,0.25,0.27],[0.08,0.13,0.15],[0.40,0.46,0.43]);
+            cv.blit_bld_sprite(4,(3.0,3.0,61.0,61.0),(0.0,0.0,1.0,1.0));
         }
         CmdIcon::AllArmy => {
-            icon_backdrop(&mut cv, [0.44, 0.16, 0.12], [0.18, 0.06, 0.06], [0.95, 0.45, 0.22]);
-            // 軍旗と交差する二振りの青銅戈・兜
-            cv.poly(&[(16.0, 10.0), (48.0, 16.0), (16.0, 28.0)], [0.88, 0.20, 0.16, 1.0]);
-            cv.capsule(14.0, 54.0, 50.0, 14.0, 2.6, [0.85, 0.68, 0.32, 1.0]);
-            cv.capsule(50.0, 54.0, 14.0, 14.0, 2.6, [0.85, 0.68, 0.32, 1.0]);
-            cv.circle(32.0, 38.0, 12.0, [0.92, 0.76, 0.36, 1.0]);
-            cv.poly(&[(20.0, 38.0), (44.0, 38.0), (46.0, 50.0), (18.0, 50.0)], [0.75, 0.58, 0.26, 1.0]);
-            cv.poly(&[(32.0, 16.0), (25.0, 28.0), (39.0, 28.0)], [0.95, 0.22, 0.16, 1.0]);
+            icon_backdrop(&mut cv,[0.18,0.25,0.27],[0.08,0.13,0.15],[0.40,0.46,0.43]);
+            for x in [3.0,20.0,37.0] {
+                cv.blit_unit_sprite(1,(x,7.0,x+26.0,60.0),(0.0,0.0,1.0,1.0),None);
+            }
         }
     }
     icon_frame(&mut cv);
@@ -988,6 +855,10 @@ impl Art {
             btn_dis: None,
             res_icons: Default::default(),
             cmd_icons: Default::default(),
+            national_infantry: Vec::new(),
+            national_infantry_flip: Vec::new(),
+            french_tank: Default::default(),
+            late_infantry: Vec::new(),
             unit_sprites: Default::default(),
             unit_sprites_flip: Default::default(),
             bld_sprites: Default::default(),
@@ -1039,6 +910,22 @@ impl Art {
             let sz = UNIT_SPRITE_SZ as u32;
             self.unit_sprites[b] = gfx.create_bitmap(sz, sz, &load_unit_sprite_bgra(b, false));
             self.unit_sprites_flip[b] = gfx.create_bitmap(sz, sz, &load_unit_sprite_bgra(b, true));
+        }
+        self.national_infantry.clear();
+        self.national_infantry_flip.clear();
+        for raw in RAW_NATIONAL_INFANTRY {
+            self.national_infantry.push(gfx.create_bitmap(160, 160, &load_raw_sprite_bgra(raw, 160, false, 1.0)));
+            self.national_infantry_flip.push(gfx.create_bitmap(160, 160, &load_raw_sprite_bgra(raw, 160, true, 1.0)));
+        }
+        self.late_infantry.clear();
+        for raw in RAW_LATE_INFANTRY {
+            self.late_infantry.push([
+                gfx.create_bitmap(160, 160, &load_raw_sprite_bgra(raw, 160, false, 1.0)),
+                gfx.create_bitmap(160, 160, &load_raw_sprite_bgra(raw, 160, true, 1.0)),
+            ]);
+        }
+        for flip in 0..2 {
+            self.french_tank[flip] = gfx.create_bitmap(160, 160, &load_raw_sprite_bgra(RAW_FRENCH_TANK, 160, flip == 1, 1.0));
         }
         let bsz = BLD_SPRITE_SZ as u32;
         for b in 0..N_BLD {
@@ -1147,6 +1034,22 @@ impl Art {
         }
     }
 
+    pub fn national_unit_sprite(&self, k: UnitKind, era: Era, nation: usize, year: f32, flip_x: bool) -> Option<&ID2D1Bitmap> {
+        if k == UnitKind::Infantry {
+            if let Some(idx) = late_infantry_index(nation, year) {
+                if let Some(pair) = self.late_infantry.get(idx) {
+                    return pair[flip_x as usize].as_ref();
+                }
+            }
+            let sprites = if flip_x { &self.national_infantry_flip } else { &self.national_infantry };
+            if let Some(Some(bmp)) = sprites.get(nation) { return Some(bmp); }
+        }
+        if k == UnitKind::Tank && (nation == crate::geo::FRA || nation == crate::geo::USA) {
+            return self.french_tank[flip_x as usize].as_ref();
+        }
+        self.unit_sprite(k, era, flip_x)
+    }
+
     pub fn unit_sprite(&self, k: UnitKind, _era: Era, flip_x: bool) -> Option<&ID2D1Bitmap> {
         let idx = k as usize;
         if flip_x {
@@ -1154,10 +1057,6 @@ impl Art {
         } else {
             self.unit_sprites[idx].as_ref()
         }
-    }
-
-    pub fn unit_icon(&self, k: UnitKind, _era: Era) -> Option<&ID2D1Bitmap> {
-        self.cmd_icons[CmdIcon::of_unit(k) as usize].as_ref()
     }
 
     pub fn bld_icon(&self, k: BKind) -> Option<&ID2D1Bitmap> {
@@ -1187,8 +1086,8 @@ impl Art {
             gfx.fill_rect(x0, y0, x1, y1, [0.11, 0.09, 0.07, 0.96]);
         }
         // 立体的な金・青銅の二重縁取り
-        gfx.stroke_rect(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5, 2.0, [0.78, 0.64, 0.34, 0.95]);
-        gfx.stroke_rect(x0 + 3.0, y0 + 3.0, x1 - 3.0, y1 - 3.0, 1.0, [0.35, 0.26, 0.14, 0.9]);
+        gfx.stroke_rect(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5, 2.0, [0.48, 0.57, 0.57, 0.95]);
+        gfx.stroke_rect(x0 + 3.0, y0 + 3.0, x1 - 3.0, y1 - 3.0, 1.0, [0.16, 0.23, 0.25, 0.9]);
     }
 
     /// 内部のくぼんだ木目・竹簡ボックスを描画
@@ -1200,35 +1099,18 @@ impl Art {
         }
         // 彫り込みの影と金枠
         gfx.stroke_rect(x0, y0, x1, y1, 1.5, [0.05, 0.04, 0.03, 0.9]);
-        gfx.stroke_rect(x0 + 1.5, y0 + 1.5, x1 - 1.5, y1 - 1.5, 1.0, [0.62, 0.50, 0.26, 0.75]);
+        gfx.stroke_rect(x0 + 1.5, y0 + 1.5, x1 - 1.5, y1 - 1.5, 1.0, [0.40, 0.49, 0.49, 0.75]);
     }
 
-    /// 四隅に古代中国・青銅器風の角飾り（雷紋金具）を描画
+    /// Drafting registration marks at panel corners.
     pub fn draw_corner_ornaments(&self, gfx: &Gfx, x0: f32, y0: f32, x1: f32, y1: f32, s: f32) {
-        let gold = [0.92, 0.78, 0.38, 0.95];
-        let dark = [0.22, 0.16, 0.08, 0.95];
-        for &(cx, cy, dx, dy) in &[
-            (x0, y0, 1.0f32, 1.0f32),
-            (x1, y0, -1.0, 1.0),
-            (x0, y1, 1.0, -1.0),
-            (x1, y1, -1.0, -1.0),
-        ] {
-            let ax0 = cx.min(cx + dx * s);
-            let ax1 = cx.max(cx + dx * s);
-            let ay0 = cy.min(cy + dy * 4.0);
-            let ay1 = cy.max(cy + dy * 4.0);
-            gfx.fill_rect(ax0, ay0, ax1, ay1, gold);
-            let bx0 = cx.min(cx + dx * 4.0);
-            let bx1 = cx.max(cx + dx * 4.0);
-            let by0 = cy.min(cy + dy * s);
-            let by1 = cy.max(cy + dy * s);
-            gfx.fill_rect(bx0, by0, bx1, by1, gold);
-            let kx = cx + dx * 5.0;
-            let ky = cy + dy * 5.0;
-            gfx.fill_circle(kx, ky, 2.2, dark);
-            gfx.fill_circle(kx, ky, 1.3, [1.0, 0.92, 0.60, 1.0]);
+        let rule = [0.65, 0.67, 0.58, 0.75];
+        for (x, y, dx, dy) in [(x0,y0,1.0,1.0),(x1,y0,-1.0,1.0),(x0,y1,1.0,-1.0),(x1,y1,-1.0,-1.0)] {
+            gfx.fill_rect(x.min(x + dx * s), y, x.max(x + dx * s), y + 1.0, rule);
+            gfx.fill_rect(x, y.min(y + dy * s), x + 1.0, y.max(y + dy * s), rule);
         }
     }
+
 }
 
 /// タイル (x, y) 内のサブピクセル (px, py) の色を Age of Empires 風に高精細描画する
@@ -1575,3 +1457,41 @@ pub fn draw_world_unit(
     }
 }
 
+
+// Approximate introduction of standard field uniforms; this is visual only.
+fn late_infantry_index(nation: usize, year: f32) -> Option<usize> {
+    use crate::geo::{GER, GBR, FRA, BEL};
+    match nation {
+        GER if year >= 1916.5 => Some(0),
+        GBR if year >= 1916.0 => Some(1),
+        FRA if year >= 1915.5 => Some(2),
+        BEL if year >= 1915.5 => Some(3),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod asset_tests {
+    use super::*;
+    #[test]
+    fn uniforms_follow_country_and_date() {
+        use crate::geo::{GER, GBR, FRA, BEL, OTT};
+        for n in [GER, GBR, FRA, BEL, OTT] { assert_eq!(late_infantry_index(n, 1914.5), None); }
+        assert_eq!(late_infantry_index(FRA, 1915.5), Some(2));
+        assert_eq!(late_infantry_index(BEL, 1915.5), Some(3));
+        assert_eq!(late_infantry_index(GBR, 1916.0), Some(1));
+        assert_eq!(late_infantry_index(GER, 1916.5), Some(0));
+        assert_eq!(late_infantry_index(OTT, 1918.0), None);
+    }
+    #[test]
+    fn embedded_sprites_have_valid_premultiplied_alpha() {
+        for (sprites, size) in [(RAW_NATIONAL_INFANTRY.as_slice(),160), (RAW_LATE_INFANTRY.as_slice(),160), (RAW_UNIT_SPRITES.as_slice(),160), (RAW_BLD_SPRITES.as_slice(),192), (RAW_HERO_SPRITES.as_slice(),128)] {
+            for raw in sprites {
+                assert_eq!(raw.len(), size * size * 4);
+                assert!(raw.chunks_exact(4).any(|p| p[3] == 0));
+                assert!(raw.chunks_exact(4).any(|p| p[3] > 200));
+                assert!(raw.chunks_exact(4).all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+            }
+        }
+    }
+}

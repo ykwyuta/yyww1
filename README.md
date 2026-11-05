@@ -74,7 +74,9 @@ F5（または画面右上の「記録 F5」）で記録画面を開く。3枠�
 | `src/game/tutorial.rs` | チュートリアル（フランスで開始） |
 | `src/art.rs`・`src/gfx.rs` | アイコン・UI の生成と描画層（WebGL2 / Canvas2D） |
 | `src/i18n.rs`・`src/lang.rs` | 三言語の切り替えとデータの訳 |
-| `tools/gen_art.py` | 兵・建物・英雄・天使の素材を描いて `assets/` に書き出す（Pillow） |
+| `tools/import_generated_art.py` | ImageGen製の国別軍装・兵器・建物・英雄アトラスをPNG／前乗算BGRAへ変換 |
+| `assets/sources/` | 採用した生成元画像、生成プロンプト、再取り込み手順と史実表現の範囲 |
+| `tools/gen_art.py` | 旧手続き生成素材（復元する場合のみ `--legacy-overwrite` を指定） |
 | `web/` | ブラウザ側（index.html・main.js） |
 
 ## テスト
