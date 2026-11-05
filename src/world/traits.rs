@@ -19,10 +19,12 @@ pub struct TraitMods {
     pub upgrade: f32,
     /// 損害による世論の悪化の受けやすさ
     pub morale: f32,
+    /// 自国の領内で守る兵の受ける損害（内線・塹壕）
+    pub entrench: f32,
 }
 
 impl TraitMods {
-    pub const NONE: TraitMods = TraitMods { eco: 1.0, atk: [1.0; N_KINDS], cost: [1.0; N_KINDS], upkeep: 1.0, def: 1.0, upgrade: 1.0, morale: 1.0 };
+    pub const NONE: TraitMods = TraitMods { eco: 1.0, atk: [1.0; N_KINDS], cost: [1.0; N_KINDS], upkeep: 1.0, def: 1.0, upgrade: 1.0, morale: 1.0, entrench: 1.0 };
 }
 
 pub struct Trait {
@@ -60,6 +62,8 @@ pub const TRAITS: &[Trait] = &[
         }
         m.upgrade *= 0.8;
     }),
+    tr!(GER, "内線作戦", "鉄道網で兵を素早く前線から前線へ回す。自国の領内で守る兵の受ける損害-20%", ALL, |m| m.entrench *= 0.8),
+    tr!(AUH, "カルパティアの守り", "山脈に守られた国境。自国の領内で守る兵の受ける損害-10%", ALL, |m| m.entrench *= 0.9),
     tr!(GER, "Uボート艦隊", "英国の海上交通を断つ潜水艦隊。Uボートの攻撃+15%", ALL, |m| m.atk[SUB] *= 1.15),
     tr!(GER, "英国の海上封鎖", "北海を封鎖され、食糧と原料の輸入が途絶えた（1915年〜）。生産-10%", (ymd(1915, 1, 1), 2000.0), |m| m.eco *= 0.9),
     tr!(GER, "カブラの冬", "1916年の凶作で、カブラで飢えをしのいだ（1917年〜）。生産-8%", (ymd(1917, 1, 1), 2000.0), |m| m.eco *= 0.92),
@@ -166,11 +170,6 @@ impl World {
             UnitKind::Transport => false,
             _ => n < NATIONS.len() && special_kinds(n).iter().any(|&(kk, from)| kk == k && self.year_f() >= from),
         }
-    }
-
-    /// 天子のように滅びない国はない
-    pub fn immortal(&self, _n: usize) -> bool {
-        false
     }
 
     /// その国の兵種の訓練費

@@ -242,9 +242,10 @@ impl World {
             return None;
         }
         let (src, dst) = (self.comp_at(lead), self.comp_at(goal));
-        // 海の成分ごとに、もっともよい乗船地・上陸地
+        // 海の成分ごとに、もっともよい乗船地・上陸地（上陸地は味方の港・海岸を優先し、無ければ敵の海岸）
         let mut emb: Vec<(u16, f32, V2, V2)> = Vec::new();
         let mut lan: Vec<(u16, f32, V2, V2)> = Vec::new();
+        let mut beach: Vec<(u16, f32, V2, V2)> = Vec::new();
         let consider = |list: &mut Vec<(u16, f32, V2, V2)>, sc: u16, score: f32, l: V2, s: V2| {
             if sc == u16::MAX {
                 return;
@@ -280,13 +281,27 @@ impl World {
         // 海岸
         for &(l, s) in self.coast.iter() {
             let (lp, sp) = (tc(l), tc(s));
-            let cc = self.land_comp[Map::idx(l.0, l.1)];
+            let li = Map::idx(l.0, l.1);
+            let cc = self.land_comp[li];
             let sc = self.sea_comp[Map::idx(s.0, s.1)];
-            if cc == src {
+            let o = self.owner[li] as usize;
+            // 上陸してよいのは自国か同盟国の領内の海岸（どの国の領土でもない海岸は、他に無いときだけ）
+            let friendly = o == n || (o < NATIONS.len() && self.allied(n, o));
+            if cc == src && (friendly || o >= NATIONS.len()) {
                 consider(&mut emb, sc, lp.dist(from), lp, sp);
             }
             if cc == dst {
-                consider(&mut lan, sc, lp.dist(goal), lp, sp);
+                if friendly {
+                    consider(&mut lan, sc, lp.dist(goal), lp, sp);
+                } else {
+                    consider(&mut beach, sc, lp.dist(goal), lp, sp);
+                }
+            }
+        }
+        // 行き先の陸に味方の上陸地が無い海の成分だけ、敵の海岸に上陸する
+        for b in beach {
+            if !lan.iter().any(|x| x.0 == b.0) {
+                lan.push(b);
             }
         }
         let mut best: Option<(f32, Ferry)> = None;

@@ -106,7 +106,6 @@ enum Act {
     Diplo,
     Help,
     War(usize),
-    Peace(usize),
     /// 和睦の申し入れへの返答（true=受諾）
     PeaceAnswer(bool),
     Start,
@@ -249,7 +248,7 @@ fn unit_desc(k: UnitKind) -> &'static str {
         UnitKind::Storm => t!("浸透戦術の精鋭。歩兵・砲兵に強く、建物の攻撃に優れる。", "Elite infiltration troops. Strong against infantry and artillery, good at attacking buildings.", "渗透战术的精锐。克制步兵与炮兵，擅长攻击建筑。"),
         UnitKind::Alpine => t!("山岳部隊。丘や森を苦にせず、そこで受ける損害が少ない。", "Mountain troops. Unhindered by hills and forests, and take less damage there.", "山地部队。不受丘陵与森林影响，在其中受到的伤害较少。"),
         UnitKind::Submarine => t!("海の中から輸送船を沈める。駆逐艦にしか攻撃されない。", "Sinks transports from beneath the waves. Only destroyers can attack it.", "从海中击沉运输船。只有驱逐舰能攻击它。"),
-        UnitKind::Destroyer => t!("Uボートを狩る快速の軍艦。沿岸の敵も砲撃できる。", "A fast warship that hunts U-boats. It can also shell enemies on the coast.", "猎杀U艇的快速军舰。也能炮击沿岸的敌人。"),
+        UnitKind::Destroyer => t!("Uボートを狩る快速の軍艦。船団を守る。", "A fast warship that hunts U-boats and guards convoys.", "猎杀U艇、护卫船队的快速军舰。"),
         UnitKind::Transport => t!("兵や物資を運ぶ船。海の向こうへ兵を動かすと、港で自動的に乗り降りする。", "A ship carrying troops or supplies. Order troops across the sea and they board and land at ports automatically.", "运送士兵或物资的船只。命令士兵渡海时，会在港口自动上下船。"),
     }
 }
@@ -1836,7 +1835,7 @@ impl Game {
         let p = self.screen_to_world(x, y);
         let mut best: Option<(f32, usize)> = None;
         for (i, n) in self.world.nations.iter().enumerate() {
-            if !n.alive {
+            if !n.alive || i >= NATIONS.len() {
                 continue;
             }
             let d = n.home.dist(p);
@@ -1845,7 +1844,12 @@ impl Game {
             }
         }
         if let Some((_, i)) = best {
-            self.title_sel = Some(i);
+            if NATIONS[i].playable {
+                self.title_sel = Some(i);
+            } else {
+                // 米国は選べない
+                self.notice(t!("米国は選べない（妨害を受けると協商国側で参戦する）", "The United States cannot be chosen (it joins the Entente if provoked)", "不能选择美国（受到妨碍时会加入协约国参战）"));
+            }
         }
     }
 
@@ -1882,7 +1886,7 @@ impl Game {
             Act::Start => {
                 // 押した場所に出るボタンの説明を、始めた直後に出さない
                 self.tip_until = 0.0;
-                if let Some(n) = self.title_sel {
+                if let Some(n) = self.title_sel.filter(|&n| n < NATIONS.len() && NATIONS[n].playable) {
                     self.world.player = n;
                     self.world.heroic = true;
                     self.screen = Screen::Playing;
@@ -2186,21 +2190,6 @@ impl Game {
                     self.notice(&tf!("休戦期間中（残り{}年）", "Truce in effect ({} years left)", "休战期内（剩余{}年）", r));
                 } else {
                     self.world.declare_war(pl, o, false);
-                }
-            }
-            Act::Peace(o) => {
-                let w = &mut self.world;
-                if w.coalition_locked(pl, o) {
-                    self.notice(t!("連合軍の討伐中は和睦できない", "Cannot make peace while a coalition campaign is on", "联军讨伐期间无法议和"));
-                    return;
-                }
-                let dur = w.years - w.war_start[pl][o];
-                let accept = w.peace_offer[o] || (dur > 5.0 && (w.nations[o].strength < w.nations[pl].strength * 1.1 || w.rng.chance(0.25)));
-                if accept {
-                    w.make_peace(pl, o, 10.0);
-                } else {
-                    let t = tf!("{} は和睦を拒否した", "{} refused peace", "{}拒绝议和", crate::lang::tx(w.nations[o].name));
-                    self.notice(&t);
                 }
             }
             Act::PeaceAnswer(accept) => self.world.answer_peace(accept),

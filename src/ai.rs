@@ -1,6 +1,6 @@
 //! コンピュータ国家の思考
 
-use crate::geo::{Map, NATIONS, Bloc, GER, AUH, GBR, FRA};
+use crate::geo::{NATIONS, Bloc, GER, AUH, GBR, FRA, RUS};
 use crate::rng::Rng;
 use crate::world::*;
 
@@ -299,8 +299,16 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     let nat = &w.nations[n];
     let res = nat.res;
     let share_goal = if at_war {
-        // 世論が悪いときは控える
-        if nat.opinion < 30.0 { 0.38 } else { 0.5 }
+        // 世論が悪いときは控える。英国は徴兵制（1916年）までは志願兵だけ
+        // ロシアは動員が遅い（1915年まで）
+        let base = if n == GBR && w.year_f() < ymd(1916, 1, 27) {
+            0.35
+        } else if n == RUS && w.year_f() < ymd(1915, 1, 1) {
+            0.4
+        } else {
+            0.5
+        };
+        if nat.opinion < 30.0 { base - 0.12 } else { base }
     } else if nat.bloc == Bloc::Neutral {
         0.2
     } else {
@@ -308,7 +316,7 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
     };
     let pop_now = (nat.workers + nat.soldiers + nat.q_soldiers).max(1) as f32;
     let share = (nat.soldiers + nat.q_soldiers) as f32 / pop_now;
-    let food_ok = res[0] > 300.0 || nat.income[0] > nat.upkeep * 1.2 + 0.3;
+    let food_ok = res[0] > 250.0 && nat.income[0] > nat.upkeep * 1.1;
     if share < share_goal && food_ok && nat.workers > 6 && !barracks.is_empty() {
         let b = barracks[a.rng.below(barracks.len() as u32) as usize];
         if w.bld(b).map_or(false, |x| x.queue.len() < 2) {
@@ -407,30 +415,40 @@ fn command_army(w: &mut World, n: usize, a: &mut AiState, soldiers: &[Mil]) {
         return;
     }
     let home = w.nations[n].home;
-    // 領内の侵入者（いちばん首都に近いもの）
-    let mut intruder: Option<V2> = None;
-    for u in w.units.iter() {
-        if !u.alive || u.kind.naval() || !w.at_war(n, u.nation as usize) {
+    // 防衛：もっとも脅かされている自国の都市（周りの敵兵の力が大きいもの）へ、近くの兵を集める
+    let mut threat: Option<(f32, V2, f32)> = None;
+    for b in w.blds.iter() {
+        if !b.alive || b.nation as usize != n || !b.kind.city() || !b.done() {
             continue;
         }
-        let (x, y) = u.pos.tile();
-        if Map::inb(x, y) && w.owner[Map::idx(x, y)] as usize == n {
-            if intruder.map_or(true, |p| p.dist(home) > u.pos.dist(home)) {
-                intruder = Some(u.pos);
+        let c = b.center();
+        let (enemy, mine) = w.power_near(n, c, 10.0);
+        if enemy > 0.0 {
+            // 足りない分が大きいほど、首都ほど急ぐ
+            let need = enemy * 1.3 + 1.0 - mine + if b.kind == BKind::Capital { 3.0 } else { 0.0 };
+            if need > 0.0 && threat.map_or(true, |t| need > t.0) {
+                threat = Some((need, c, enemy));
             }
         }
     }
     let idle: Vec<&Mil> = soldiers.iter().filter(|s| s.order == Order::Idle).collect();
-    if let Some(p) = intruder {
-        // 防衛：近くの手の空いている兵を向かわせる（遠征中の兵はそのまま）
-        let hs: Vec<Handle> = soldiers
+    if let Some((need, p, _)) = threat {
+        let mut cands: Vec<&Mil> = soldiers
             .iter()
-            .filter(|s| (s.order == Order::Idle || matches!(s.order, Order::AttackMove(_))) && s.pos.dist(p) < 45.0 && !w.needs_ferry(s.pos, p))
-            .map(|s| s.h)
+            .filter(|s| !matches!(s.order, Order::Attack(_)) && s.pos.dist(p) > 4.0 && s.pos.dist(p) < 40.0 && !w.needs_ferry(s.pos, p))
             .collect();
-        if hs.len() >= 2 {
+        cands.sort_by(|a, b| a.pos.dist(p).partial_cmp(&b.pos.dist(p)).unwrap());
+        let mut sum = 0.0;
+        let mut hs = Vec::new();
+        for s in cands {
+            if sum >= need {
+                break;
+            }
+            sum += s.power;
+            hs.push(s.h);
+        }
+        if !hs.is_empty() {
             w.order_move(&hs, p, true);
-            return;
         }
     }
     let at_war = (0..NATIONS.len()).any(|o| w.at_war(n, o));
@@ -458,18 +476,21 @@ fn command_army(w: &mut World, n: usize, a: &mut AiState, soldiers: &[Mil]) {
         return;
     }
     // 兵ごとに最寄りの敵の都市を狙う
+    let enemy_cities: Vec<V2> = w.blds.iter().filter(|b| b.alive && b.kind.city() && b.done() && w.at_war(n, b.nation as usize)).map(|b| b.center()).collect();
+    let our_cities: Vec<V2> = w.blds.iter().filter(|b| b.alive && b.kind.city() && b.done() && (b.nation as usize == n || w.allied(n, b.nation as usize))).map(|b| b.center()).collect();
     let mut groups: Vec<(V2, Vec<Handle>)> = Vec::new();
     for s in cand.iter() {
         let mut best: Option<(f32, V2)> = None;
-        for b in w.blds.iter() {
-            if b.alive && b.kind.city() && b.done() && w.at_war(n, b.nation as usize) {
-                let mut d = b.center().dist(s.pos);
-                if w.needs_ferry(s.pos, b.center()) {
-                    d = d * 1.6 + 40.0;
-                }
-                if best.map_or(true, |x| d < x.0) {
-                    best = Some((d, b.center()));
-                }
+        for &c in enemy_cities.iter() {
+            let mut d = c.dist(s.pos);
+            if best.map_or(false, |x| d >= x.0) {
+                continue;
+            }
+            if w.needs_ferry(s.pos, c) {
+                d = d * 1.6 + 40.0;
+            }
+            if best.map_or(true, |x| d < x.0) {
+                best = Some((d, c));
             }
         }
         if let Some((_, p)) = best {
@@ -480,19 +501,8 @@ fn command_army(w: &mut World, n: usize, a: &mut AiState, soldiers: &[Mil]) {
         }
     }
     for (p, hs) in groups {
-        // 目標の周りの敵兵と、すでに近くにいる味方の兵を数える（局所的に優勢なときだけ攻める）
-        let mut enemy = 0.0;
-        let mut ours = hs.len() as f32;
-        for u in w.units.iter() {
-            if !u.alive || u.kind.naval() || !u.kind.military() || u.pos.dist(p) > 14.0 {
-                continue;
-            }
-            if w.at_war(n, u.nation as usize) {
-                enemy += u.power;
-            } else if u.nation as usize == n && !hs.contains(&Handle { idx: 0, gen: 0 }) {
-                ours += 0.0;
-            }
-        }
+        // 目標の周りの敵兵を数える（局所的に優勢なときだけ攻める）
+        let (mut enemy, _) = w.power_near(n, p, 14.0);
         // 都市そのものの守り（砲台）も敵の力に数える
         for b in w.blds.iter() {
             if b.alive && (b.kind.city() || b.kind == BKind::Fort) && b.done() && b.center().dist(p) < 6.0 && w.at_war(n, b.nation as usize) {
@@ -501,20 +511,16 @@ fn command_army(w: &mut World, n: usize, a: &mut AiState, soldiers: &[Mil]) {
         }
         let my_power: f32 = hs.iter().filter_map(|&h| w.unit(h)).map(|u| u.power).sum();
         let attack = my_power >= enemy * 1.7 + 4.0 && hs.len() >= 5;
-        let _ = ours;
         if attack {
             w.order_move(&hs, p, true);
             continue;
         }
         // 劣勢なら、目標にいちばん近い自国か同盟国の都市（前線）で守りを固める
         let mut front: Option<(f32, V2)> = None;
-        for b in w.blds.iter() {
-            let bn = b.nation as usize;
-            if b.alive && b.kind.city() && b.done() && (bn == n || w.allied(n, bn)) {
-                let d = b.center().dist(p);
-                if best_front(front, d) {
-                    front = Some((d, b.center()));
-                }
+        for &c in our_cities.iter() {
+            let d = c.dist(p);
+            if best_front(front, d) {
+                front = Some((d, c));
             }
         }
         if let Some((_, f)) = front {

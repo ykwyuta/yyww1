@@ -212,13 +212,13 @@ impl UnitKind {
     }
     pub fn base_atk(self) -> f32 {
         match self {
-            UnitKind::Worker => 3.0,
-            UnitKind::Infantry => 10.0,
-            UnitKind::Artillery => 20.0,
-            UnitKind::Cavalry => 13.0,
-            UnitKind::Tank => 17.0,
-            UnitKind::Storm => 14.0,
-            UnitKind::Alpine => 11.0,
+            UnitKind::Worker => 2.0,
+            UnitKind::Infantry => 6.5,
+            UnitKind::Artillery => 13.0,
+            UnitKind::Cavalry => 8.5,
+            UnitKind::Tank => 11.0,
+            UnitKind::Storm => 9.0,
+            UnitKind::Alpine => 7.0,
             UnitKind::Submarine => 30.0,
             UnitKind::Destroyer => 15.0,
             UnitKind::Transport => 0.0,
@@ -294,8 +294,7 @@ impl UnitKind {
             UnitKind::Cavalry => 0.5,
             UnitKind::Tank => 1.3,
             UnitKind::Worker => 0.4,
-            UnitKind::Destroyer => 0.6,
-            UnitKind::Submarine | UnitKind::Transport => 0.0,
+            UnitKind::Submarine | UnitKind::Transport | UnitKind::Destroyer => 0.0,
         }
     }
     /// 丘で受ける損害の軽減（山岳兵は丘・森に強い）
@@ -844,10 +843,15 @@ impl World {
             return;
         }
         let total = (d.pop as f32 * 0.82) as usize;
-        // 中立国は兵が少ない
-        let mil_share = match d.bloc {
-            Bloc::Neutral => 0.22,
-            _ => 0.36,
+        // 開戦時の兵の割合：大陸の大国は大軍、英国は小さな職業軍、中立国は少なめ
+        let mil_share = match i {
+            GER | AUH => 0.42,
+            FRA => 0.38,
+            RUS => 0.38,
+            GBR => 0.16,
+            SRB | BEL => 0.34,
+            _ if d.bloc == Bloc::Neutral => 0.22,
+            _ => 0.32,
         };
         let soldiers = (total as f32 * mil_share) as usize;
         let workers = total - soldiers;
@@ -1185,10 +1189,6 @@ impl World {
         Map::inb(x, y) && self.cost[Map::idx(x, y)].is_finite()
     }
 
-    pub fn line_clear(&self, a: V2, b: V2) -> bool {
-        self.line_clear_for(a, b, false)
-    }
-
     /// 海のマスか（船が通れる）
     pub fn sea_at(&self, p: V2) -> bool {
         let (x, y) = p.tile();
@@ -1273,11 +1273,6 @@ impl World {
     /// 同じ陣営（中立同士は同盟ではない）
     pub fn allied(&self, a: usize, b: usize) -> bool {
         a != b && a < NATIONS.len() && b < NATIONS.len() && self.nations[a].bloc != Bloc::Neutral && self.nations[a].bloc == self.nations[b].bloc
-    }
-
-    /// 連合による拘束（第一次大戦では陣営の間の和睦はない）
-    pub fn coalition_locked(&self, a: usize, b: usize) -> bool {
-        a < NATIONS.len() && b < NATIONS.len() && self.nations[a].bloc != Bloc::Neutral && self.nations[b].bloc != Bloc::Neutral && self.nations[a].bloc != self.nations[b].bloc
     }
 
     /// 宣戦する。中立国を攻めると、その国は相手の陣営に加わる。同盟国はともに戦う
@@ -1852,7 +1847,7 @@ impl World {
         match ak {
             Some(UnitKind::Transport) => false,
             Some(UnitKind::Submarine) => tk.naval(),
-            Some(UnitKind::Destroyer) => true,
+            Some(UnitKind::Destroyer) => tk.naval(),
             Some(UnitKind::Worker) => !tk.naval(),
             _ => tk != UnitKind::Submarine,
         }
@@ -2364,10 +2359,10 @@ impl World {
                 if b.cooldown <= 0.0 {
                     let (c, ni) = (b.center(), b.nation as usize);
                     let (range, cd, dmg) = match (fort, self.era == Era::Early) {
-                        (true, true) => (FORT_RANGE, FORT_COOLDOWN, 14.0),
-                        (true, false) => (FORT_RANGE, FORT_COOLDOWN, 20.0),
-                        (false, true) => (6.5, 1.6, 14.0),
-                        (false, false) => (6.5, 1.6, 20.0),
+                        (true, true) => (FORT_RANGE, FORT_COOLDOWN, 10.0),
+                        (true, false) => (FORT_RANGE, FORT_COOLDOWN, 14.0),
+                        (false, true) => (6.5, 1.6, 10.0),
+                        (false, false) => (6.5, 1.6, 14.0),
                     };
                     b.cooldown = cd;
                     if let Some(t) = self.nearest_enemy_unit(ni, c, range) {
@@ -2769,7 +2764,7 @@ impl World {
                                 let tn = self.units[ti].nation;
                                 let home_def = !tk.naval() && Map::inb(tx, ty) && self.owner[Map::idx(tx, ty)] == tn;
                                 let dug_in = home_def && self.near_own_fort(tn as usize, self.units[ti].pos);
-                                let home_k = if home_def { (0.65 - 0.3 * self.lost_frac(tn as usize)).max(0.38) } else { 1.0 };
+                                let home_k = if home_def { (0.65 - 0.3 * self.lost_frac(tn as usize)).max(0.38) * self.nations[tn as usize].tm.entrench } else { 1.0 };
                                 // 敵地の奥では補給が細る
                                 let (ax, ay) = pos.tile();
                                 let ao = if Map::inb(ax, ay) { self.owner[Map::idx(ax, ay)] as usize } else { NONE as usize };
@@ -3078,6 +3073,32 @@ impl World {
         self.update_stats();
     }
 
+    /// 地点の周りの陸の兵の力：(敵, 自国)
+    pub fn power_near(&self, n: usize, p: V2, r: f32) -> (f32, f32) {
+        let (mut enemy, mut mine) = (0.0, 0.0);
+        let g0x = ((p.x - r) as i32 / GCELL).clamp(0, GW - 1);
+        let g1x = ((p.x + r) as i32 / GCELL).clamp(0, GW - 1);
+        let g0y = ((p.y - r) as i32 / GCELL).clamp(0, GH - 1);
+        let g1y = ((p.y + r) as i32 / GCELL).clamp(0, GH - 1);
+        for gy in g0y..=g1y {
+            for gx in g0x..=g1x {
+                for &i in self.grid[(gy * GW + gx) as usize].iter() {
+                    let u = &self.units[i as usize];
+                    if !u.alive || u.kind.naval() || !u.kind.military() || u.pos.dist(p) > r {
+                        continue;
+                    }
+                    let un = u.nation as usize;
+                    if un == n {
+                        mine += u.power;
+                    } else if self.at_war(n, un) {
+                        enemy += u.power;
+                    }
+                }
+            }
+        }
+        (enemy, mine)
+    }
+
     /// 開戦時から失った都市の割合（0〜1）
     pub fn lost_frac(&self, n: usize) -> f32 {
         if n >= NATIONS.len() {
@@ -3258,7 +3279,8 @@ mod tests {
             w.step();
             sailed |= w.units.iter().any(|u| u.alive && u.nation as usize == n && u.ship.as_ref().map_or(false, |s| !s.cargo.is_empty() && s.phase == 1));
             let near = w.units.iter().filter(|u| u.alive && u.nation as usize == n && u.kind.land_mil() && u.pos.dist(paris) < 20.0).count();
-            if near >= hs.len() {
+            // 混み合った港で遅れる兵もいるので、半分が渡れば良しとする
+            if near * 2 >= hs.len() + 1 {
                 landed = true;
                 break;
             }
@@ -3380,6 +3402,30 @@ mod tests {
             w.update_buildings(DT);
         }
         assert!(w.unit(uh).map_or(true, |u| u.hp < hp0), "塹壕が撃たない");
+    }
+
+    /// 同盟国以外（参戦した敵国）をすべて打ち破れば勝利。中立のままの国は数えない
+    #[test]
+    fn victory_condition() {
+        let mut w = World::new(12345);
+        w.player = FRA;
+        w.start_game();
+        while w.year_f() < ymd(1914, 8, 15) {
+            w.step();
+        }
+        assert!(w.game_over.is_none());
+        for n in [GER, AUH] {
+            w.eliminate(n, FRA);
+        }
+        // オスマン帝国・ブルガリアはまだ中立なので数えない
+        assert_eq!(w.enemies_left(FRA), 0);
+        w.monthly();
+        assert!(matches!(&w.game_over, Some((true, _))), "{:?}", w.game_over);
+        // 中立国のままのプレイヤーは勝利しない
+        let mut w = World::new(12345);
+        w.player = SWE;
+        w.monthly();
+        assert!(w.game_over.is_none());
     }
 
     /// 生産は開戦時がもっとも高い

@@ -28,8 +28,6 @@ impl Ord for Node {
 
 /// 兵・民の経路の重み（ほぼ最短）
 pub const UNIT_WEIGHT: f32 = 1.15;
-/// 隊商の経路の重み（最短でなくてよいので、探す量を大きく減らす）
-pub const CARAVAN_WEIGHT: f32 = 1.6;
 
 pub struct PathFinder {
     /// 直前の探索で展開したマスの数（1フレームの予算の計算に使う）

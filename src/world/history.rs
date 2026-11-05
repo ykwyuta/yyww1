@@ -39,6 +39,7 @@ impl HKind {
         }
     }
     /// 国にとって不利な出来事か
+    #[allow(dead_code)]
     pub fn bad(self) -> bool {
         matches!(self, HKind::Revolt | HKind::Disaster)
     }
@@ -53,6 +54,7 @@ impl HKind {
 
 /// イベントの効果（対象は原則としてイベントの国）
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub enum Fx {
     /// 人物・作戦：生産と兵の攻撃力を一定年数だけ高める（負なら混乱）
     Figure(&'static str, f32, f32, f32),
