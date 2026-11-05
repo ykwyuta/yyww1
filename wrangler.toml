@@ -1,0 +1,8 @@
+# Cloudflare Workers（静的アセットのみ）としてデプロイする設定。
+# `bash build.sh && npx wrangler deploy` で dist/ をアップロードする。
+# Cloudflare Pages を使う場合は、ビルドコマンド `bash build.sh`、出力ディレクトリ `dist` を指定する。
+name = "yyww1"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./dist"
