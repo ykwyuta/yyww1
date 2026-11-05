@@ -64,7 +64,7 @@ Selecting your own units stops time; it resumes when you give an order or clear 
 
 ## Fog of war
 
-You see only around your own workers, soldiers and buildings. Every capital is known from the start.
+You see only around your own workers, soldiers and buildings. Every city (where it is and who holds it) is known from the start.
 
 ## Controls
 

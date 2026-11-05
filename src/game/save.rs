@@ -127,6 +127,8 @@ impl Game {
         };
         self.paused = false;
         self.fog = fog;
+        // 古い記録でも、都市の所在はすべて分かるようにする
+        self.reveal_cities();
         self.fog_t = 0.0;
         self.update_fog(0.0);
         groups.resize(10, Vec::new());
