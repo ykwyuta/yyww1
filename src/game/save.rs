@@ -135,6 +135,7 @@ impl Game {
         self.groups = groups;
         self.sel.clear();
         self.sel_b = None;
+        self.sel_bs.clear();
         self.last_sel.clear();
         self.mode = Mode::Normal;
         self.cmd_pause = false;
