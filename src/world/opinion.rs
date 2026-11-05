@@ -74,8 +74,8 @@ impl World {
         }
         // 国力に対する軍事費
         let b = self.mil_burden(n);
-        if b > 0.45 {
-            p.spending = -((b - 0.45) * 10.0).min(3.0);
+        if b > 0.55 {
+            p.spending = -((b - 0.55) * 10.0).min(3.0);
         } else if !war {
             p.spending = 0.5;
         }

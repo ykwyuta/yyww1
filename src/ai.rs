@@ -310,8 +310,8 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
         // ロシアは動員が遅い（1915年まで）
         let base: f32 = if n == GBR && w.year_f() < ymd(1916, 1, 27) {
             0.4
-        } else if n == RUS && w.year_f() < ymd(1915, 1, 1) {
-            0.45
+        } else if n == RUS && w.year_f() < ymd(1915, 7, 1) {
+            0.4
         } else {
             0.55
         };
