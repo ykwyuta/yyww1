@@ -44,7 +44,7 @@ The United States cannot be chosen. If it is obstructed — its neutral ships su
 
 ## Trench lines
 
-With only workers selected, press Trench (R) to dig one. It fires on approaching enemies and cuts damage to friendly troops beside it by 30%. One per two cities (2–10).
+With only workers selected, press Trench (R) to dig one. It fires on approaching enemies and cuts damage to friendly troops beside it by 30%. Up to 4 plus 2 per city (at most 60).
 
 ## Historical events
 

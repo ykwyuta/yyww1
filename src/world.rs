@@ -1089,9 +1089,9 @@ impl World {
         None
     }
 
-    /// 築ける塹壕陣地の数（都市2つごとに1つ、2〜10）
+    /// 築ける塹壕陣地の数（4＋都市1つにつき2つ、最大60）
     pub fn fort_cap(&self, nation: usize) -> u32 {
-        (2 + self.nations[nation].cities / 2).min(10)
+        (4 + self.nations[nation].cities * 2).min(60)
     }
 
     /// 建設中を含む要塞の数
@@ -3472,7 +3472,7 @@ mod tests {
         let cap = w.fort_cap(n);
         let home = w.nations[n].home;
         let mut spots = Vec::new();
-        for r in 3..16 {
+        for r in 3..40 {
             for dy in -r..=r {
                 for dx in -r..=r {
                     let (tx, ty) = (home.x as i32 + dx, home.y as i32 + dy);

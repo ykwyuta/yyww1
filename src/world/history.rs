@@ -409,6 +409,11 @@ impl World {
         self.banner = self.banner_queue.pop_front();
     }
 
+    /// まだ出ていない告知の数
+    pub fn banner_queue_len(&self) -> usize {
+        self.banner_queue.len()
+    }
+
     pub fn queue_banner(&mut self, b: Banner) {
         if self.banner.is_none() {
             self.banner = Some(b);
