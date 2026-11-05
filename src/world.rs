@@ -3397,6 +3397,40 @@ mod tests {
         assert!(landed, "大陸に上陸しなかった");
     }
 
+    /// ドイツの兵が英国（敵の島）へ攻め込める：敵の都市を攻撃目標にすると、港で船に乗って海岸に上陸する
+    #[test]
+    fn germany_lands_in_britain() {
+        let mut w = World::new(12345);
+        w.player = GER;
+        w.protect_player = true;
+        w.start_game();
+        while w.year_f() < ymd(1914, 8, 6) {
+            w.step();
+        }
+        let n = GER;
+        let berlin = w.nations[n].home;
+        let london_i = (0..w.blds.len()).find(|&i| w.blds[i].alive && w.blds[i].kind == BKind::Capital && w.blds[i].nation as usize == GBR).unwrap();
+        let london = w.blds[london_i].center();
+        assert!(w.needs_ferry(berlin, london));
+        let hs: Vec<Handle> = (0..w.units.len())
+            .filter(|&i| w.units[i].alive && w.units[i].nation as usize == n && w.units[i].kind.land_mil())
+            .map(|i| w.uh(i))
+            .take(8)
+            .collect();
+        w.order_attack(&hs, Target::Bld(w.bh(london_i)));
+        assert!(hs.iter().all(|&h| w.unit(h).map_or(false, |u| u.ferry.is_some())), "渡海の計画が立たない");
+        let mut best = 0;
+        for _ in 0..(400.0 / DT) as usize {
+            w.step();
+            let on_island = w.units.iter().filter(|u| u.alive && u.nation as usize == n && u.kind.land_mil() && !w.needs_ferry(u.pos, london)).count();
+            best = best.max(on_island);
+            if best >= 4 {
+                break;
+            }
+        }
+        assert!(best >= 4, "英国に上陸できない");
+    }
+
     /// 帝政の国は世論が尽きると革命が起きて降伏し、都市は敵に明け渡される
     #[test]
     fn revolution_surrender() {

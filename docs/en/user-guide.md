@@ -32,7 +32,7 @@ Every state can build infantry (rifles), artillery (long range, strong against i
 
 ## Crossing the sea
 
-Order troops across the sea and they board transports at the nearest friendly port (or beach) and land at the port or beach nearest the goal. U-boats can sink transports.
+Order troops across the sea and they board transports at the nearest friendly port (or beach) and land at the port or beach nearest the goal. U-boats can sink transports. To invade Britain from Germany, for example, select soldiers and right-click a British city (London, say): they march to a home port (blue mark), sail, land on the British coast (orange mark) and attack the city.
 
 ## Colonies and convoys
 
@@ -64,7 +64,7 @@ Selecting your own units stops time; it resumes when you give an order or clear 
 
 ## Fog of war
 
-You see only around your own workers, soldiers and buildings. Every city (where it is and who holds it) is known from the start.
+You see only around your own and your allies' workers, soldiers and buildings. Every city (where it is and who holds it) is known from the start.
 
 ## Controls
 
