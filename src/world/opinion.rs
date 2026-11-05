@@ -31,12 +31,11 @@ pub struct OpinionParts {
     pub spending: f32,
     pub food: f32,
     pub cities: f32,
-    pub other: f32,
 }
 
 impl OpinionParts {
     pub fn total(&self) -> f32 {
-        self.weariness + self.casualties + self.spending + self.food + self.cities + self.other
+        self.weariness + self.casualties + self.spending + self.food + self.cities
     }
 }
 
@@ -86,10 +85,6 @@ impl World {
         }
         // 都市の得失
         p.cities = (nat.won_cities as f32 * 2.0 - nat.lost_cities as f32 * 2.5).clamp(-6.0, 4.0);
-        // 英雄がいれば士気が上がる
-        if self.hero_of(n).is_some() {
-            p.other += 1.0;
-        }
         // 開戦の熱狂：開戦から半年は世論が下がりにくい
         if self.years < 0.5 {
             for v in [&mut p.weariness, &mut p.casualties, &mut p.spending] {

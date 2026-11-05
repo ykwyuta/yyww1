@@ -5,7 +5,7 @@ use super::*;
 
 /// 天使がすべての都市を占領するまでの年数（半年）
 pub const DESCENT_YEARS: f32 = 0.5;
-/// 天使の能力（英雄にしか傷つけられない）
+/// 天使の能力（どの兵にも傷つけられない）
 const DIVINE_POWER: f32 = 12.0;
 /// 同時にいる天使の上限
 const DIVINE_MAX: usize = 120;
@@ -88,8 +88,7 @@ impl World {
             if done >= n {
                 break;
             }
-            // 英雄の守る都市は、最後の月まで奪えない
-            if !self.blds[bi].alive || self.blds[bi].nation as usize == a || (p < 1.0 && self.hero_guarded(bi)) {
+            if !self.blds[bi].alive || self.blds[bi].nation as usize == a {
                 continue;
             }
             self.capture_city(bi, a);

@@ -349,7 +349,7 @@ impl World {
                         if !self.nations[k].alive || (self.protect_player && k == self.player) {
                             continue;
                         }
-                        let idx: Vec<usize> = (0..self.units.len()).filter(|&i| self.units[i].alive && self.units[i].nation as usize == k && !self.units[i].kind.naval() && self.units[i].hero == NONE && !self.units[i].divine).collect();
+                        let idx: Vec<usize> = (0..self.units.len()).filter(|&i| self.units[i].alive && self.units[i].nation as usize == k && !self.units[i].kind.naval() && !self.units[i].divine).collect();
                         let cnt = (idx.len() as f32 * f).round() as usize;
                         for j in 0..cnt {
                             let i = idx[(j * 7919 + k * 31) % idx.len()];
@@ -407,6 +407,11 @@ impl World {
     /// いまの告知を閉じて、次の告知へ
     pub fn dismiss_banner(&mut self) {
         self.banner = self.banner_queue.pop_front();
+    }
+
+    /// まだ出ていない告知の数
+    pub fn banner_queue_len(&self) -> usize {
+        self.banner_queue.len()
     }
 
     pub fn queue_banner(&mut self, b: Banner) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""第一次大戦版の素材（兵・建物・英雄・天使）を描いて assets/ に書き出す。
+"""第一次大戦版の素材（兵・建物・天使）を描いて assets/ に書き出す。
 
   python3 tools/gen_art.py
 
@@ -556,79 +556,6 @@ def gen_angels():
     save(p.done(), "divine/divine_cavalry")
 
 
-# ---------------------------------------------------------------- 英雄
-# (名前, 国, 兵種, 制服, 帽子, 帽子の色, ひげ)
-UNI = {
-    "GER": (112, 118, 104), "AUH": (128, 150, 160), "OTT": (150, 132, 90), "BUL": (110, 116, 90),
-    "GBR": (150, 128, 82), "FRA": (120, 140, 176), "RUS": (130, 128, 92), "SRB": (110, 112, 96),
-    "BEL": (100, 96, 70), "ITA": (120, 124, 112), "ROU": (110, 120, 100), "GRE": (130, 120, 90),
-    "POR": (110, 120, 120), "USA": (126, 110, 70), "NED": (110, 116, 104), "SUI": (90, 104, 110),
-    "ESP": (90, 100, 110), "SWE": (60, 70, 100), "NOR": (70, 80, 100), "DEN": (70, 70, 80),
-}
-HEROES = [
-    ("GER", "Infantry", "pickel", True, True), ("GER", "Artillery", "cap", True, False), ("GER", "Cavalry", "kalpak", True, False),
-    ("GER", "Cavalry", "pilot", False, False), ("GER", "Submarine", "cap", False, False),
-    ("AUH", "Infantry", "kepi", True, False), ("AUH", "Alpine", "cap", True, False), ("AUH", "Submarine", "cap", True, False),
-    ("OTT", "Infantry", "kalpak", True, False), ("OTT", "Infantry", "fez", True, False), ("OTT", "Cavalry", "kalpak", True, True),
-    ("BUL", "Infantry", "cap", True, False), ("BUL", "Artillery", "cap", True, False),
-    ("GBR", "Infantry", "cap", True, False), ("GBR", "Infantry", "cap", True, False), ("GBR", "Cavalry", "cap", True, False),
-    ("GBR", "Cavalry", "keffiyeh", False, False), ("GBR", "Destroyer", "bicorne", False, False),
-    ("FRA", "Infantry", "kepi", True, False), ("FRA", "Infantry", "kepi", True, False), ("FRA", "Artillery", "kepi", True, False),
-    ("FRA", "Cavalry", "pilot", False, False),
-    ("RUS", "Infantry", "cap", True, True), ("RUS", "Cavalry", "kalpak", True, True), ("RUS", "Infantry", "cap", True, False),
-    ("RUS", "Destroyer", "cap", False, False),
-    ("SRB", "Infantry", "cap", True, False), ("SRB", "Infantry", "cap", True, False),
-    ("BEL", "Infantry", "cap", True, False),
-    ("ITA", "Infantry", "kepi", True, False), ("ITA", "Infantry", "alpine", True, False), ("ITA", "Cavalry", "pilot", False, False),
-    ("ITA", "Destroyer", "cap", False, False),
-    ("ROU", "Infantry", "cap", True, False), ("ROU", "Infantry", "cap", False, False),
-    ("GRE", "Infantry", "cap", True, False),
-    ("POR", "Infantry", "cap", True, False),
-    ("USA", "Infantry", "cap", True, False), ("USA", "Infantry", "brodie", False, False), ("USA", "Cavalry", "pilot", False, False),
-    ("SUI", "Alpine", "kepi", True, False), ("NED", "Infantry", "kepi", True, False), ("ESP", "Infantry", "crown", True, False),
-    ("SWE", "Infantry", "crown", True, False), ("NOR", "Infantry", "flatcap", False, True), ("DEN", "Infantry", "crown", True, False),
-]
-
-
-def hero_glow(p, col):
-    p.ell(64, 64, 60, 60, (255, 230, 140, 46))
-    p.ell(64, 64, 58, 58, None, outline=(240, 200, 90), w=2.2)
-
-
-def gen_heroes():
-    for i, (nat, kind, gear, mus, beard) in enumerate(HEROES):
-        p = Pen(128)
-        uni = UNI[nat]
-        hero_glow(p, uni)
-        gold = (230, 196, 80)
-        if kind == "Submarine" or kind == "Destroyer":
-            p.ell(64, 98, 56, 9, (40, 80, 120, 160))
-            hull = (84, 90, 96) if kind == "Submarine" else (110, 116, 124)
-            if kind == "Submarine":
-                p.poly([(8, 94), (22, 86), (106, 86), (122, 92), (106, 100), (20, 100)], hull, outline=(30, 32, 36), w=1)
-                p.poly([(52, 86), (56, 70), (78, 70), (82, 86)], shade(hull, 0.9), outline=(30, 32, 36), w=1)
-            else:
-                p.poly([(6, 88), (122, 84), (114, 104), (14, 104)], hull, outline=(40, 42, 46), w=1)
-                p.rect(46, 72, 84, 86, shade(hull, 1.05), outline=(40, 42, 46), w=0.8)
-                for fx in (52, 64):
-                    p.rect(fx, 56, fx + 7, 74, (60, 60, 64))
-            # 艦橋に立つ艦長
-            soldier(p, 66, 72, 0.42, (40, 44, 70), gear, (30, 34, 60), weapon="binocular", pack=False, mustache=mus, beard=beard)
-            p.poly([(96, 60), (112, 64), (96, 70)], gold)
-            p.line([(96, 60), (96, 86)], (60, 60, 60), 1.2)
-        elif kind == "Cavalry":
-            horse(p, 60, 116, 0.78, coat=(80, 50, 30) if i % 2 else (150, 110, 70))
-            soldier(p, 56, 92, 0.58, uni, gear, shade(uni, 0.85), weapon="sword", pack=False, mustache=mus, beard=beard, sash=gold)
-        elif kind == "Artillery":
-            p.line([(60, 96), (118, 74)], (90, 96, 76), 6)
-            p.ell(84, 100, 16, 16, None, outline=(60, 44, 30), w=3)
-            soldier(p, 40, 120, 0.82, uni, gear, shade(uni, 0.85), weapon="binocular", pack=False, mustache=mus, beard=beard, coat=True, sash=gold)
-        else:
-            weapon = "alpen" if kind == "Alpine" else ("baton" if mus else "rifle")
-            soldier(p, 62, 122, 0.92, uni, gear, shade(uni, 0.85), weapon=weapon, pack=not mus, mustache=mus, beard=beard, coat=mus, sash=gold if mus else None)
-        save(p.done(), "heroes/hero_%02d" % i)
-
-
 def gen_icon():
     """アプリのアイコン（鉄兜と月桂冠）"""
     p = Pen(512)
@@ -652,7 +579,6 @@ def main():
     gen_buildings()
     gen_buildings(angel=True)
     gen_angels()
-    gen_heroes()
     icon = gen_icon()
     web = os.path.join(ROOT, "..", "web")
     icon.save(os.path.join(web, "icon-512.png"))
@@ -661,7 +587,6 @@ def main():
     bg.alpha_composite(icon.resize((180, 180), Image.LANCZOS))
     bg.convert("RGB").save(os.path.join(web, "apple-touch-icon.png"))
     icon.save(os.path.join(ROOT, "app_icon.ico"), sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    print("heroes", len(HEROES))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """Slice approved ImageGen atlases and export the game's premultiplied BGRA.
 
-Usage: python tools/import_generated_art.py ATLAS infantry|equipment|buildings|heroes|late
+Usage: python tools/import_generated_art.py ATLAS infantry|equipment|buildings|late
 The original atlas is retained in assets/sources for reproducibility.
 """
 import argparse
@@ -14,7 +14,6 @@ LAYOUTS = {
     'infantry': (5, 4, 160, [f'nations/{c}_infantry' for c in COUNTRIES]),
     'equipment': (5, 2, 160, ['units/worker', 'units/artillery', 'units/cavalry', 'units/tank', 'units/storm', 'units/alpine', 'units/submarine', 'units/destroyer', 'units/transport', 'units/tank_french']),
     'buildings': (3, 2, 192, [f'map/{n}' for n in 'capital town barracks farm fort dock'.split()]),
-    'heroes': (8, 6, 128, [f'heroes/hero_{i:02}' for i in range(46)]),
     'late': (2, 2, 160, [f'nations/{c}_infantry_late' for c in ['ger', 'gbr', 'fra', 'bel']]),
 }
 

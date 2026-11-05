@@ -20,8 +20,6 @@ If no victor emerges by June 28, 1919 (the day of the Treaty of Versailles), ang
 - **Public opinion and revolution**: heavier losses than the enemy, crushing military spending or empty granaries lower opinion. In an empire, opinion running out means revolution and surrender.
 - **National units**: tanks (Britain, France, the US), stormtroopers (Germany), mountain troops (Italy, Austria-Hungary), U-boats (Germany, Austria-Hungary), destroyers (Britain, France, Italy, Russia, the US).
 - **The sea and the colonies**: ships bring resources and workers to Britain and France from their colonies and from America; U-boats sink them. America stays neutral unless provoked.
-- **Heroes**: you can call only heroes from your own state (Hindenburg, Foch, Brusilov, Kemal, Lawrence…).
 
-![Summoning a hero](../images/summon.jpg)
 
 See the [User Guide](user-guide.md) for how to play.

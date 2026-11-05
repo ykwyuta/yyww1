@@ -9,7 +9,7 @@ use crate::ai::AiState;
 use crate::save::{RResult, Reader, Writer};
 
 /// 記録形式の版（中身の並びを変えたら上げる）
-pub const SAVE_VERSION: u32 = 1;
+pub const SAVE_VERSION: u32 = 2;
 
 fn bad(what: &str) -> String {
     tf!("記録が壊れている（{}）", "The save is damaged ({})", "存档已损坏（{}）", what)
@@ -80,7 +80,6 @@ fn w_ship(w: &mut Writer, s: &Ship) {
         w.u8(c.kind as u8);
         w.f32(c.power);
         w.f32(c.hp);
-        w.u8(c.hero);
     }
     for k in 0..3 {
         w.f32(s.res[k]);
@@ -99,7 +98,7 @@ fn r_ship(r: &mut Reader) -> RResult<Ship> {
     let n = r.len(64)?;
     let mut cargo = Vec::with_capacity(n);
     for _ in 0..n {
-        cargo.push(Cargo { kind: kind_of(r.u8()?)?, power: r.f32()?, hp: r.f32()?, hero: r.u8()? });
+        cargo.push(Cargo { kind: kind_of(r.u8()?)?, power: r.f32()?, hp: r.f32()? });
     }
     let res = [r.f32()?, r.f32()?, r.f32()?];
     let workers = r.u8()?;
@@ -346,7 +345,6 @@ impl World {
             w_v2(w, u.dir);
             w_oh(w, u.last_attacker);
             w.bool(u.divine);
-            w.u8(u.hero);
             w.usize(u.build_queue.len());
             for &h in u.build_queue.iter() {
                 w_h(w, h);
@@ -458,7 +456,6 @@ impl World {
         w.bool(self.protect_player);
         w.u32(self.player_orders);
         w.bool(self.ai_player);
-        w.bool(self.heroic);
         w.bool(self.game_over.is_some());
         if let Some((win, t)) = &self.game_over {
             w.bool(*win);
@@ -560,7 +557,6 @@ impl World {
                 selected: false,
                 last_attacker: None,
                 divine: false,
-                hero: NONE,
                 build_queue: std::collections::VecDeque::new(),
                 ferry: None,
                 ship: None,
@@ -583,7 +579,6 @@ impl World {
                 u.dir = r_v2(r)?;
                 u.last_attacker = r_oh(r)?;
                 u.divine = r.bool()?;
-                u.hero = r.u8()?;
                 let k = r.len(1000)?;
                 for _ in 0..k {
                     u.build_queue.push_back(r_h(r)?);
@@ -732,7 +727,6 @@ impl World {
         w.protect_player = r.bool()?;
         w.player_orders = r.u32()?;
         w.ai_player = r.bool()?;
-        w.heroic = r.bool()?;
         w.game_over = if r.bool()? { Some((r.bool()?, r.str()?)) } else { None };
         w.descent = if r.bool()? { Some(Descent { start: r.f32()?, revived: r.bool()?, total: r.usize()?, taken: r.usize()? }) } else { None };
         // ---- 記録・史書

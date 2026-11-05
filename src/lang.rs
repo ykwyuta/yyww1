@@ -1,7 +1,7 @@
 //! 表示言語（日本語・英語・中国語）
 //!
 //! 画面の文字は `t!`（決まった文）・`tf!`（数や名前を差し込む文）で三言語を並べて書き、
-//! いまの言語のものを選ぶ。国名・史実の出来事・特徴・英雄などのデータは日本語のまま持ち、
+//! いまの言語のものを選ぶ。国名・史実の出来事・特徴などのデータは日本語のまま持ち、
 //! 表示するときに `tx` で辞書（`i18n.rs`）から訳を引く。
 
 use std::collections::HashMap;
@@ -86,7 +86,7 @@ fn dict() -> &'static HashMap<&'static str, (&'static str, &'static str)> {
     D.get_or_init(|| crate::i18n::DICT.iter().map(|&(ja, en, zh)| (ja, (en, zh))).collect())
 }
 
-/// データの文（国名・出来事・特徴・英雄など）を、いまの言語に訳す。辞書に無ければそのまま
+/// データの文（国名・出来事・特徴など）を、いまの言語に訳す。辞書に無ければそのまま
 pub fn tx(ja: &'static str) -> &'static str {
     match lang() {
         Lang::Ja => ja,
