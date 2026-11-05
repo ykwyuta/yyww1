@@ -1,10 +1,10 @@
 # 欧州大戦 1914–1919
 
-Rust で作った Age of Empires 風のリアルタイムストラテジーの**ブラウザ版**です。
+Rust で作った Age of Empires 風のリアルタイムストラテジーです。**ブラウザ版**（WebAssembly）と **Windows 版**（Direct3D11 / Direct2D）があり、ゲームの中身は共通です。
 [ykwyuta/yyempire](https://github.com/ykwyuta/yyempire)（春秋戦国 — 中華統一への道）のエンジン（シミュレーション・AI・UI・記録・描画層）をそのまま流用し、
 舞台を第一次世界大戦の欧州に移しました。WebAssembly にコンパイルし、描画は WebGL2 と Canvas2D。外部クレートは使っていません。
 
-静的サイトとして Cloudflare（Workers の静的アセット／Pages）で公開できます。
+ブラウザ版は静的サイトとして Cloudflare（Workers の静的アセット／Pages）で公開できます。Windows 版は [ykwyuta/yyempire-win](https://github.com/ykwyuta/yyempire-win) と同じ作り（`windows` クレートだけで描画・入力・UI を自作）です。
 
 **ドキュメント**：紹介とユーザーガイド（[日本語](docs/ja/introduction.md)・[English](docs/en/introduction.md)・[中文](docs/zh/introduction.md)）。
 
@@ -18,6 +18,19 @@ cd dist && python3 -m http.server 8000
 ```
 
 ブラウザで http://localhost:8000/ を開く。
+
+### Windows 版
+
+```
+cargo run --release --bin yyww1-win
+```
+
+Windows で `cargo build --release --bin yyww1-win` とすると `target/release/yyww1-win.exe` ができる（アイコンは `build.rs` が埋め込む）。GitHub Actions の `windows` ジョブでも exe を作って成果物（yyww1-windows）に上げる。
+
+- 描画は Direct3D11（地形・図形）と Direct2D／DirectWrite（文字・UI）。文字が小さいときは Ctrl＋＋／Ctrl＋−、F11 で全画面。
+- 表示言語は `%APPDATA%\yyww1\settings.txt` に保存する（初回は Windows の表示言語に合わせる）。
+- 記録は `%APPDATA%\yyww1\saves\slot{N}.yysav`。ブラウザ版と同じ形式なので、「書き出す」「ファイルから読み込む」で行き来できる。
+- 異常終了の調査ログは `%APPDATA%\yyww1\logs\` に残る。
 
 ### Cloudflare への公開
 
@@ -37,6 +50,7 @@ cd dist && python3 -m http.server 8000
 - **兵は民から徴兵する**：民と兵を合わせた人口には上限があり、兵営で兵を1人訓練するたびに民が1人減る。軍を大きくすれば経済は細る。動員解除で兵を民に戻すこともできる。
 - **世論**：戦場での損失が相手より多い、人口に対して兵が多すぎる（軍事費が重い）、食糧が尽きた、都市を失った……といった状況が続くと世論が下がる。**帝政の国（ドイツ・オーストリア・オスマン・ロシア・ブルガリア）では世論が尽きると革命が起きて降伏**し、都市は敵国に明け渡される。民主制の国では革命は起きないが、ストライキで生産が落ちる。
 - **国ごとに造れる兵種が違う**：歩兵・砲兵・騎兵はどの国も造れる。戦車（英国1916年9月〜・フランス1917年4月〜・米国1918年〜）、突撃兵（ドイツ1916年7月〜）、山岳兵（イタリア・オーストリア・フランス・スイス）、Uボート（ドイツ・オーストリア）、駆逐艦（英・仏・伊・露・米）。
+- **兵器は兵を割り当てて造る**：戦車は兵5人、Uボートは4人、駆逐艦は6人を選んで割り当てる（戦車は自国の領内で、軍艦は自国の軍港のそばで）。兵は兵器に変わり、兵には戻せない。兵器の能力は乗った兵の能力の平均。
 - **海を渡る**：海の向こうへ兵を動かすと、兵は港で輸送船に乗って渡り、目的地に近い港や海岸に上陸する。
 - **植民地と Uボート**：英国・フランスには植民地（カナダ・インド・アフリカ・アルジェリアなど）と米国から船で資源と民が届く。Uボートはこれを沈め、駆逐艦は Uボートを狩る。
 - **米国の参戦**：米国は中立。中立の米国の船を沈められるなど「妨害」を受けて参戦気運が 100 に達したときだけ、協商国側で参戦する。ドイツは「無制限潜水艦作戦」を始められる（ドイツの AI は史実どおり1917年2月に始める）。
@@ -78,6 +92,11 @@ F5（または画面右上の「記録 F5」）で記録画面を開く。3枠�
 | `assets/sources/` | 採用した生成元画像、生成プロンプト、再取り込み手順と史実表現の範囲 |
 | `tools/gen_art.py` | 旧手続き生成素材（復元する場合のみ `--legacy-overwrite` を指定） |
 | `web/` | ブラウザ側（index.html・main.js） |
+| `src/main.rs`・`src/win/app.rs` | Windows 版の実行ファイルと、Win32 の窓・メッセージループ |
+| `src/win/gfx.rs` | Windows 版の描画層（Direct3D11 / Direct2D / DirectWrite） |
+| `src/win/platform.rs` | Windows 版の記録・設定の置き場所（%APPDATA%\yyww1）とファイルダイアログ |
+| `src/win/crashlog.rs` | Windows 版の異常終了の調査ログ |
+| `build.rs` | Windows 版の exe にアイコンを埋め込む |
 
 ## テスト
 

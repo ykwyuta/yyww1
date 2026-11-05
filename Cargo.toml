@@ -2,12 +2,50 @@
 name = "yyww1"
 version = "0.1.0"
 edition = "2021"
-description = "第一次世界大戦リアルタイムストラテジー（Rust → WebAssembly）"
+description = "第一次世界大戦リアルタイムストラテジー（Rust → WebAssembly / Windows: Direct3D11 + Direct2D）"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Windows 版の実行ファイル（yyww1-win.exe）
+[[bin]]
+name = "yyww1-win"
+path = "src/main.rs"
+
 [dependencies]
+
+# Windows 版だけが使う（Win32 API バインディング）。ブラウザ版は外部クレートなし
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62.2"
+features = [
+    "Wdk_System_SystemServices",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D_Fxc",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_System_SystemInformation",
+    "Win32_Globalization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
+    "Win32_System_Memory",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+]
+
+[target.'cfg(windows)'.dependencies]
+windows-numerics = "0.3.1"
 
 [profile.dev]
 opt-level = 1
