@@ -414,8 +414,27 @@ impl Game {
     fn fit_title_camera(&mut self) {
         let (w, h) = (self.gfx.width as f32, self.gfx.height as f32);
         let avail_w = (w - 380.0).max(300.0);
-        self.zoom = (avail_w / MAP_W as f32).min(h / MAP_H as f32) * 0.98;
-        self.cam = v2(MAP_W as f32 / 2.0 + 380.0 / 2.0 / self.zoom, MAP_H as f32 / 2.0);
+        // 地図全体（大西洋と米国まで）。スマートフォンでは小さすぎて国名が重なるので、選べる国の首都の範囲に寄せる
+        let (mut x0, mut y0, mut x1, mut y1) = (0.0f32, 0.0f32, MAP_W as f32, MAP_H as f32);
+        if self.gfx.compact {
+            let (mut a0, mut b0, mut a1, mut b1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+            for (i, n) in self.world.nations.iter().enumerate().take(NATIONS.len()) {
+                if NATIONS[i].playable {
+                    a0 = a0.min(n.home.x);
+                    b0 = b0.min(n.home.y);
+                    a1 = a1.max(n.home.x);
+                    b1 = b1.max(n.home.y);
+                }
+            }
+            if a0 < a1 {
+                x0 = (a0 - 30.0).max(0.0);
+                x1 = (a1 + 30.0).min(MAP_W as f32);
+                y0 = (b0 - 24.0).max(0.0);
+                y1 = (b1 + 24.0).min(MAP_H as f32);
+            }
+        }
+        self.zoom = (avail_w / (x1 - x0)).min(h / (y1 - y0)) * 0.98;
+        self.cam = v2((x0 + x1) / 2.0 + 380.0 / 2.0 / self.zoom, (y0 + y1) / 2.0);
     }
 
     fn rebuild_terrain(&mut self) {
@@ -2839,12 +2858,27 @@ impl Game {
                 city.to_string()
             };
             let col = if divine { [1.0, 0.88, 0.38] } else { n.color };
-            labels.push((sx, sy, name, cap, col, divine));
+            // 重なったときに残す順：タイトルで選んだ国・自国、首都、人口の多い国
+            let ni = b.nation as usize;
+            let mut pri = if cap { 100.0 } else { 0.0 } + if ni < NATIONS.len() { NATIONS[ni].pop as f32 } else { 50.0 };
+            if (self.screen == Screen::Title && self.title_sel == Some(ni)) || (self.screen != Screen::Title && ni == self.world.player) {
+                pri += 1000.0;
+            }
+            labels.push((pri, sx, sy, name, cap, col, divine));
         }
-        for (sx, sy, name, cap, c, divine) in labels {
+        // 小さく見ているときは国名が重なるので、重なる名札は優先度の低いほうを出さない
+        labels.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut placed: Vec<(f32, f32, f32, f32)> = Vec::new();
+        for (_, sx, sy, name, cap, c, divine) in labels {
             let f = if cap && z >= 9.0 { Font::BigCenter } else { Font::NormalCenter };
             let off = if z >= 9.0 { 1.58 * z + 14.0 } else { 1.25 * z + 6.0 };
             let ty = sy - off - 14.0;
+            let lw = self.gfx.measure(&name, f) + 10.0;
+            let r = (sx - lw * 0.5, ty + 4.0, sx + lw * 0.5, ty + 24.0);
+            if placed.iter().any(|q| r.0 < q.2 && q.0 < r.2 && r.1 < q.3 && q.1 < r.3) {
+                continue;
+            }
+            placed.push(r);
             if z >= 8.0 {
                 let bw = self.gfx.measure(&name, f) + 18.0;
                 let bh = if cap { 24.0 } else { 20.0 };
@@ -3041,15 +3075,21 @@ impl Game {
             let d = &NATIONS[i];
             // スマートフォンでは説明文の欄を隠して、国の情報をその位置に詰める
             let oy = if compact { 132.0 - 316.0 } else { 0.0 };
-            self.art.draw_inset_box(&self.gfx, px + 18.0, oy + 316.0, w - 18.0, oy + 546.0);
-            self.art.draw_corner_ornaments(&self.gfx, px + 20.0, oy + 318.0, w - 20.0, oy + 544.0, 12.0);
+            // スマートフォンでは国の紹介文も省いて（下の行を詰めて）、開戦のボタンに重ならないようにする
+            let dy = if compact { -44.0 } else { 0.0 };
+            let by1 = oy + dy + if compact { 552.0 } else { 546.0 };
+            self.art.draw_inset_box(&self.gfx, px + 18.0, oy + 316.0, w - 18.0, by1);
+            self.art.draw_corner_ornaments(&self.gfx, px + 20.0, oy + 318.0, w - 20.0, by1 - 2.0, 12.0);
             if let Some(cap_ic) = self.art.national_unit_sprite(UnitKind::Infantry, self.world.era, i, self.world.year_f(), false) {
                 self.gfx.draw_bitmap(cap_ic, px + 30.0, oy + 328.0, px + 78.0, oy + 376.0);
             }
             self.gfx.fill_rect(px + 86.0, oy + 336.0, px + 104.0, oy + 368.0, c4(n.color, 1.0));
             self.gfx.stroke_rect(px + 86.0, oy + 336.0, px + 104.0, oy + 368.0, 1.2, [0.92, 0.78, 0.40, 1.0]);
             self.gfx.text_shadow(crate::lang::tx(n.name), px + 112.0, oy + 332.0, 230.0, 40.0, Font::Big, [1.0, 0.95, 0.85, 1.0]);
-            self.gfx.text(crate::lang::tx(d.desc), px + 32.0, oy + 382.0, 316.0, 44.0, Font::Normal, [0.88, 0.84, 0.76, 1.0]);
+            if !compact {
+                self.gfx.text(crate::lang::tx(d.desc), px + 32.0, oy + 382.0, 316.0, 44.0, Font::Normal, [0.88, 0.84, 0.76, 1.0]);
+            }
+            let oy = oy + dy;
             let side = bloc_name(d.bloc);
             let gov = if d.gov == Gov::Empire { t!("帝政（革命のおそれ）", "Empire (can fall to revolution)", "帝制（可能爆发革命）") } else { t!("民主制", "Democracy", "民主制") };
             let s = tf!("{}・{}　工業力 ×{:.2}", "{} · {}   Industry ×{:.2}", "{}・{}　工业力 ×{:.2}", side, gov, d.bias);
@@ -3089,7 +3129,7 @@ impl Game {
                     tip: tip.join("\n"),
                 });
             }
-            let sy = if compact { (oy + 552.0).min(h - 138.0) } else { 554.0 };
+            let sy = if compact { (oy + 560.0).min(h - 138.0) } else { 554.0 };
             self.add_button(px + 50.0, sy, w - 50.0, sy + if compact { 40.0 } else { 46.0 }, t!("この国で開戦に臨む", "Lead this state to war", "率领此国迎接开战"), "", 0, true, Act::Start, "");
         }
         if compact {
