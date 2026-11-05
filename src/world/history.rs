@@ -409,6 +409,12 @@ impl World {
         self.banner = self.banner_queue.pop_front();
     }
 
+    /// 告知をすべて消す（記録から再開したとき、前の告知をもう一度出さない）
+    pub fn clear_banners(&mut self) {
+        self.banner = None;
+        self.banner_queue.clear();
+    }
+
     /// まだ出ていない告知の数
     pub fn banner_queue_len(&self) -> usize {
         self.banner_queue.len()
