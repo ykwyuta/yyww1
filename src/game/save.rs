@@ -198,6 +198,32 @@ impl Game {
         self.notice(s);
     }
 
+    /// 異常終了のログに書く、いまの状態（Windows 版）
+    #[cfg(windows)]
+    pub fn state_text(&self) -> String {
+        let w = &self.world;
+        let n = &w.nations[w.player];
+        let units = w.units.iter().filter(|u| u.alive).count();
+        let blds = w.blds.iter().filter(|b| b.alive).count();
+        let screen = if self.screen == Screen::Playing { "対局" } else { "題字" };
+        format!(
+            "画面={} 種={} 日付={} 自国={} 民={} 兵={} 都市={} 世論={:.0} 速度={} 停止={} 天使={} チュートリアル={} 決着={} 選択={} 全ユニット={} 全建物={} 言語={} 窓={}x{}",
+            screen, self.seed, w.date_str(), n.name, n.workers, n.soldiers, n.cities, n.opinion, self.speed, self.paused, w.descent.is_some(), self.tut.is_some(), w.game_over.is_some(), self.sel.len(), units, blds, crate::lang::lang().code(), self.gfx.width, self.gfx.height
+        )
+    }
+
+    /// パニックした対局を記録に残す（Windows 版）。途中の状態なので、記録の処理まで失敗しても構わないようにする
+    #[cfg(windows)]
+    pub fn crash_save(&self) {
+        if self.can_save().is_err() {
+            return;
+        }
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.save_bytes())) {
+            Ok(data) => crate::crashlog::write_crash_save(&data),
+            Err(_) => crate::crashlog::line("[PANIC] 対局の記録もパニックした"),
+        }
+    }
+
     pub(super) fn render_save(&mut self) {
         let (w, h) = (self.gfx.width as f32, self.gfx.height as f32);
         let pw = 820.0f32.min(w - 20.0);

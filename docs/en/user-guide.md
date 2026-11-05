@@ -28,7 +28,7 @@ Opinion falls while you keep losing more than the enemy, keep too many soldiers 
 
 ## Units
 
-Every state can build infantry (rifles), artillery (long range, strong against infantry and buildings) and cavalry (fast, strong against artillery). Some have special units: tanks (Britain from Sept 1916, France from Apr 1917, the US from 1918), stormtroopers (Germany from July 1916), mountain troops (Italy, Austria-Hungary, France, Switzerland), U-boats (Germany, Austria-Hungary) and destroyers (Britain, France, Italy, Russia, the US). Warships are built at a naval base on the coast.
+Every state can build infantry (rifles), artillery (long range, strong against infantry and buildings) and cavalry (fast, strong against artillery). Some have special units: tanks (Britain from Sept 1916, France from Apr 1917, the US from 1918), stormtroopers (Germany from July 1916), mountain troops (Italy, Austria-Hungary, France, Switzerland), U-boats (Germany, Austria-Hungary) and destroyers (Britain, France, Italy, Russia, the US). Tanks, U-boats and destroyers are weapons: select soldiers and press ‘Crew …’ (B / U) to make one (a tank takes 5 soldiers, a U-boat 4, a destroyer 6; tanks inside your territory, warships next to one of your naval bases). The soldiers become the weapon and can never be released.
 
 ## Crossing the sea
 

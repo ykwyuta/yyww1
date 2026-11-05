@@ -31,3 +31,29 @@ jobs:
         with:
           name: yyww1-web
           path: dist
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (Windows)
+        run: cargo build --release --locked --bin yyww1-win
+
+      - name: Test
+        # long_sim は全 AI で1年分だけ回す
+        env:
+          SIM_YEARS: "1"
+        run: cargo test --release --locked
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: yyww1-windows
+          path: |
+            target/release/yyww1-win.exe
+            README.md

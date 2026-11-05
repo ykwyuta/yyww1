@@ -86,6 +86,7 @@ impl Game {
 
     /// タッチした場所に何があるか（実ピクセル）
     /// 0=地図 1=画面部品 2=ミニマップ 3=なぞってスクロールできる一覧 4=タイトル画面の地図
+    #[cfg_attr(windows, allow(dead_code))]
     pub fn hit_kind(&self, px: f32, py: f32) -> u32 {
         let (x, y) = (px / self.gfx.ui, py / self.gfx.ui);
         let w = self.gfx.width as f32;

@@ -1,22 +1,38 @@
-//! 欧州大戦 1914–1919 RTS — Rust → WebAssembly（ブラウザ版）
+//! 欧州大戦 1914–1919 RTS — ブラウザ版（Rust → WebAssembly）と Windows 版（Direct3D11 / Direct2D）
 //!
-//! デスクトップ版の Win32 メッセージループの代わりに、ブラウザ側（web/main.js）から
-//! 入力イベントとフレーム更新を受け取る。描画は gfx.rs が WebGL2 / Canvas2D に橋渡しする。
+//! ブラウザ版は web/main.js から入力イベントとフレーム更新を受け取り、gfx.rs が WebGL2 / Canvas2D に橋渡しする。
+//! Windows 版は win/app.rs の Win32 メッセージループで動き、win/gfx.rs が Direct3D11 / Direct2D で描く。
+//! シミュレーション・AI・画面などのゲームの中身は両方で共通。
 
 #[macro_use]
 mod lang;
 mod ai;
 mod art;
+#[cfg(windows)]
+#[path = "win/crashlog.rs"]
+mod crashlog;
 mod game;
 mod geo;
+#[cfg_attr(windows, path = "win/gfx.rs")]
 mod gfx;
 mod i18n;
 mod path;
+#[cfg_attr(windows, path = "win/platform.rs")]
 pub mod platform;
 mod rng;
 mod save;
 mod world;
+#[cfg(windows)]
+#[path = "win/app.rs"]
+mod win_app;
 
+/// Windows 版の入口（src/main.rs から呼ぶ）
+#[cfg(windows)]
+pub fn windows_main() {
+    win_app::main();
+}
+
+#[cfg(not(windows))]
 use std::cell::RefCell;
 
 #[derive(Clone, Copy, Debug)]
@@ -36,6 +52,7 @@ pub enum Ev {
     Scroll(f32),
 }
 
+#[cfg(not(windows))]
 thread_local! {
     static EVENTS: RefCell<Vec<Ev>> = const { RefCell::new(Vec::new()) };
     static GAME: RefCell<Option<game::Game>> = const { RefCell::new(None) };
@@ -44,11 +61,13 @@ thread_local! {
     static PENDING_NOTICE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
+#[cfg(not(windows))]
 fn push(e: Ev) {
     EVENTS.with(|v| v.borrow_mut().push(e));
 }
 
 /// 初期化：実ピクセルでの画面寸法を受け取る
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_init(w: u32, h: u32, compact: u32) {
     platform::install_panic_hook();
@@ -61,6 +80,7 @@ pub extern "C" fn yy_init(w: u32, h: u32, compact: u32) {
 
 /// 入力イベント
 /// kind: 0=移動(x,y) 1=押下(b,x,y) 2=離す(b,x,y) 3=ホイール(d) 4=キー(vk,down) 5=文字(code) 6=リサイズ(w,h)
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_event(kind: u32, a: f32, b: f32, c: f32) {
     let e = match kind {
@@ -83,6 +103,7 @@ pub extern "C" fn yy_event(kind: u32, a: f32, b: f32, c: f32) {
 }
 
 /// 1フレーム進めて描画する。終了要求なら 1
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_frame(dt: f32, focused: u32) -> u32 {
     let evs: Vec<Ev> = EVENTS.with(|v| std::mem::take(&mut *v.borrow_mut()));
@@ -104,6 +125,7 @@ pub extern "C" fn yy_frame(dt: f32, focused: u32) -> u32 {
 
 /// タッチした場所に何があるか（実ピクセル）。ブラウザ側が指の動きの解釈を決めるのに使う
 /// 0=地図 1=画面部品 2=ミニマップ 3=なぞってスクロールできる一覧 4=タイトル画面の地図
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_hit(x: f32, y: f32) -> u32 {
     GAME.with(|g| match g.borrow().as_ref() {
@@ -113,6 +135,7 @@ pub extern "C" fn yy_hit(x: f32, y: f32) -> u32 {
 }
 
 /// ブラウザが記録のデータを書き込むための領域を確保する
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_alloc(len: usize) -> *mut u8 {
     let mut v = Vec::<u8>::with_capacity(len.max(1));
@@ -122,6 +145,7 @@ pub extern "C" fn yy_alloc(len: usize) -> *mut u8 {
 }
 
 /// 記録のデータが届いた（yy_alloc で確保した領域。所有権を受け取る）
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_loaded(ptr: *mut u8, len: usize) {
     let data = unsafe { Vec::from_raw_parts(ptr, len, len.max(1)) };
@@ -129,6 +153,7 @@ pub extern "C" fn yy_loaded(ptr: *mut u8, len: usize) {
 }
 
 /// ブラウザ側からの通知（yy_alloc で確保した UTF-8 文字列）
+#[cfg(not(windows))]
 #[no_mangle]
 pub extern "C" fn yy_notice(ptr: *mut u8, len: usize) {
     let data = unsafe { Vec::from_raw_parts(ptr, len, len.max(1)) };

@@ -15,7 +15,7 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
 
-cargo build --release --target wasm32-unknown-unknown
+cargo build --release --lib --target wasm32-unknown-unknown
 
 rm -rf dist
 mkdir -p dist
