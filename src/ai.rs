@@ -1,6 +1,6 @@
 //! コンピュータ国家の思考
 
-use crate::geo::{NATIONS, Bloc, GER, AUH, GBR, FRA, RUS};
+use crate::geo::{Map, NATIONS, Bloc, GER, AUH, GBR, FRA, RUS};
 use crate::rng::Rng;
 use crate::world::*;
 
@@ -77,11 +77,11 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
         let h = Handle { idx: i as u32, gen: u.gen };
         if u.kind.naval() {
             if u.kind != UnitKind::Transport {
-                ships.push(Mil { h, order: u.order, pos: u.pos, power: u.power, kind: u.kind });
+                ships.push(Mil { h, order: u.order, pos: u.pos, power: u.strength(), kind: u.kind });
             }
         } else if u.kind.military() {
             if u.ferry.is_none() {
-                soldiers.push(Mil { h, order: u.order, pos: u.pos, power: u.power, kind: u.kind });
+                soldiers.push(Mil { h, order: u.order, pos: u.pos, power: u.strength(), kind: u.kind });
             }
         } else {
             if let Order::Gather { src, .. } = u.order {
@@ -326,17 +326,55 @@ fn think(w: &mut World, n: usize, a: &mut AiState) {
             }
         }
     }
-    // 軍艦
-    if at_war && !docks.is_empty() && !naval.is_empty() {
+    // 兵器：兵を割り当てて軍艦・戦車にする（割り当てた兵は戻らない）
+    let mut crewed: Vec<Handle> = Vec::new();
+    if at_war && !docks.is_empty() && !naval.is_empty() && soldiers.len() >= 12 {
         let want_ships = if n == GER { 7 } else if n == AUH { 3 } else { 4 };
-        if ships.len() < want_ships && w.nations[n].res[2] > 100.0 && w.nations[n].workers > 10 {
+        let r = w.nations[n].res;
+        if ships.len() < want_ships && r[1] > 160.0 && r[2] > 140.0 && a.rng.chance(0.5) {
             let d = docks[a.rng.below(docks.len() as u32) as usize];
-            if w.bld(d).map_or(false, |x| x.queue.is_empty()) {
-                let k = naval[a.rng.below(naval.len() as u32) as usize];
-                let _ = w.enqueue(d, k);
+            let k = naval[a.rng.below(naval.len() as u32) as usize];
+            if let Some(dc) = w.bld(d).map(|b| b.center()) {
+                // 軍港のそばの兵、足りなければ近い兵を軍港へ呼ぶ
+                let mut near: Vec<(f32, Handle)> = soldiers.iter().filter(|s| s.kind.land_mil() && !s.kind.weapon() && !matches!(s.order, Order::Attack(_))).map(|s| (s.pos.dist(dc), s.h)).collect();
+                near.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+                let need = k.crew() as usize;
+                if near.len() >= need + 6 {
+                    let crew: Vec<Handle> = near.iter().take(need).map(|x| x.1).collect();
+                    if near[need - 1].0 <= 9.0 {
+                        if w.crew_weapon(&crew, k).is_ok() {
+                            crewed.extend(crew);
+                        }
+                    } else if !w.needs_ferry(w.unit(crew[0]).unwrap().pos, dc) {
+                        w.order_move(&crew, dc, false);
+                        crewed.extend(crew);
+                    }
+                }
             }
         }
     }
+    let tanks = soldiers.iter().filter(|s| s.kind == UnitKind::Tank).count();
+    if at_war && w.kind_available(n, UnitKind::Tank) && tanks * 5 < soldiers.len() / 3 && soldiers.len() >= 15 {
+        let r = w.nations[n].res;
+        if r[1] > 120.0 && r[2] > 200.0 && a.rng.chance(0.4) {
+            // 自国の領内で、手の空いた兵が5人集まっているところ
+            let idle: Vec<&Mil> = soldiers.iter().filter(|s| s.kind.land_mil() && !s.kind.weapon() && !crewed.contains(&s.h) && !matches!(s.order, Order::Attack(_)) && {
+                let (x, y) = s.pos.tile();
+                w.owner[Map::idx(x, y)] as usize == n
+            }).collect();
+            if let Some(c) = idle.get(a.rng.below(idle.len().max(1) as u32) as usize) {
+                let mut near: Vec<(f32, Handle)> = idle.iter().map(|s| (s.pos.dist(c.pos), s.h)).filter(|x| x.0 < 6.0).collect();
+                if near.len() >= 5 {
+                    near.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+                    let crew: Vec<Handle> = near.iter().take(5).map(|x| x.1).collect();
+                    if w.crew_weapon(&crew, UnitKind::Tank).is_ok() {
+                        crewed.extend(crew);
+                    }
+                }
+            }
+        }
+    }
+    let soldiers: Vec<Mil> = soldiers.into_iter().filter(|s| !crewed.contains(&s.h)).collect();
 
     // ---- 能力の鍛錬（人口の上限に達したら質で補う）
     let res = w.nations[n].res;
@@ -388,11 +426,10 @@ fn assign_builder(w: &mut World, workers: &mut [(Handle, Order, V2)], bh: Handle
 fn pick_kind(w: &World, n: usize, rng: &mut Rng) -> UnitKind {
     let mut opts: Vec<(UnitKind, f32)> = vec![(UnitKind::Infantry, 5.0), (UnitKind::Artillery, 2.2), (UnitKind::Cavalry, if w.era == Era::Early { 1.2 } else { 0.5 })];
     for &(k, _) in special_kinds(n) {
-        if k.naval() || !w.kind_available(n, k) {
+        if k.weapon() || !w.kind_available(n, k) {
             continue;
         }
         let wt = match k {
-            UnitKind::Tank => 2.0,
             UnitKind::Storm => 2.5,
             UnitKind::Alpine => 1.8,
             _ => 1.0,

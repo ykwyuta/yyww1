@@ -122,6 +122,8 @@ enum Act {
     Unrestricted,
     Summon,
     SummonHero(usize),
+    /// 選んだ兵を兵器に割り当てる
+    Crew(UnitKind),
     Tutorial,
     TutNext,
     TutQuit,
@@ -244,11 +246,11 @@ fn unit_desc(k: UnitKind) -> &'static str {
         UnitKind::Infantry => t!("小銃を持つ歩兵。少し離れて撃つ。騎兵に強い。", "Riflemen who fire from short range. Strong against cavalry.", "持步枪的步兵，可稍远距离射击。克制骑兵。"),
         UnitKind::Artillery => t!("遠くから砲撃する。歩兵・戦車・建物に強いが、近づかれると脆い（騎兵に弱い）。", "Bombards from long range. Strong against infantry, tanks and buildings, but fragile up close (weak to cavalry).", "远程炮击。克制步兵、坦克与建筑，但被近身则脆弱（惧骑兵）。"),
         UnitKind::Cavalry => t!("足の速い騎兵。砲兵と民に強いが、機関銃の時代には歩兵に弱い。", "Fast cavalry. Strong against artillery and workers, but weak against infantry in the age of the machine gun.", "速度快的骑兵。克制炮兵与民，但在机枪时代惧步兵。"),
-        UnitKind::Tank => t!("鉄の箱。歩兵・騎兵に強く、体力が多いが遅い。砲兵に弱い。", "An iron box. Strong against infantry and cavalry with lots of HP, but slow. Weak to artillery.", "钢铁之箱。克制步兵与骑兵，体力多但缓慢。惧炮兵。"),
+        UnitKind::Tank => t!("鉄の箱。歩兵・騎兵に強く、体力が多いが遅い。砲兵に弱い。兵5人を割り当てて造り、兵には戻せない。", "An iron box. Strong against infantry and cavalry with lots of HP, but slow. Weak to artillery. Crewed by 5 soldiers; they cannot be released.", "钢铁之箱。克制步兵与骑兵，体力多但缓慢。惧炮兵。由5名士兵编成，无法撤回。"),
         UnitKind::Storm => t!("浸透戦術の精鋭。歩兵・砲兵に強く、建物の攻撃に優れる。", "Elite infiltration troops. Strong against infantry and artillery, good at attacking buildings.", "渗透战术的精锐。克制步兵与炮兵，擅长攻击建筑。"),
         UnitKind::Alpine => t!("山岳部隊。丘や森を苦にせず、そこで受ける損害が少ない。", "Mountain troops. Unhindered by hills and forests, and take less damage there.", "山地部队。不受丘陵与森林影响，在其中受到的伤害较少。"),
-        UnitKind::Submarine => t!("海の中から輸送船を沈める。駆逐艦にしか攻撃されない。", "Sinks transports from beneath the waves. Only destroyers can attack it.", "从海中击沉运输船。只有驱逐舰能攻击它。"),
-        UnitKind::Destroyer => t!("Uボートを狩る快速の軍艦。船団を守る。", "A fast warship that hunts U-boats and guards convoys.", "猎杀U艇、护卫船队的快速军舰。"),
+        UnitKind::Submarine => t!("海の中から輸送船を沈める。駆逐艦にしか攻撃されない。軍港のそばの兵4人を割り当てて造り、兵には戻せない。", "Sinks transports from beneath the waves. Only destroyers can attack it. Crewed by 4 soldiers at a dock; they cannot be released.", "从海中击沉运输船。只有驱逐舰能攻击它。由军港附近4名士兵编成，无法撤回。"),
+        UnitKind::Destroyer => t!("Uボートを狩る快速の軍艦。船団を守る。軍港のそばの兵6人を割り当てて造り、兵には戻せない。", "A fast warship that hunts U-boats and guards convoys. Crewed by 6 soldiers at a dock; they cannot be released.", "猎杀U艇、护卫船队的快速军舰。由军港附近6名士兵编成，无法撤回。"),
         UnitKind::Transport => t!("兵や物資を運ぶ船。海の向こうへ兵を動かすと、港で自動的に乗り降りする。", "A ship carrying troops or supplies. Order troops across the sea and they board and land at ports automatically.", "运送士兵或物资的船只。命令士兵渡海时，会在港口自动上下船。"),
     }
 }
@@ -1993,6 +1995,17 @@ impl Game {
                 let hs = self.own_sel();
                 self.upgrade_handles(hs);
             }
+            Act::Crew(k) => {
+                let hs = self.own_sel();
+                match self.world.crew_weapon(&hs, k) {
+                    Ok(h) => {
+                        let w = &self.world;
+                        self.sel.retain(|&x| w.unit(x).is_some());
+                        self.sel.push(h);
+                    }
+                    Err(e) => self.notice(e),
+                }
+            }
             Act::Convert => {
                 let mut err = None;
                 for h in self.own_sel() {
@@ -3385,6 +3398,43 @@ impl Game {
         if self.own_sel().iter().any(|&h| self.world.unit(h).map_or(false, |u| u.kind == UnitKind::Worker)) {
             let tip = if self.world.hero_of(pl).is_some() { t!("英雄は一国に一人だけ。いまの英雄が倒れれば、また呼べる", "Only one hero per state. If yours falls, you can summon again", "每国只能有一位英雄。现有英雄倒下后可再次召唤") } else { t!("選んだ民を捧げ、自国の英雄を呼ぶ（英雄の能力＝捧げた民の能力の合計×1.5〜2.8）。他国出身の英雄は呼べない", "Dedicate the selected workers to call one of your state's heroes (hero power = their total power × 1.5–2.8). Heroes from other states cannot be called", "献上所选的民，召唤本国英雄（英雄能力＝所献民能力总和×1.5〜2.8）。不能召唤他国出身的英雄") };
             self.add_button(ix + iw - 176.0, h - 58.0, ix + iw - 14.0, h - 14.0, t!("英雄召喚", "Summon Hero", "召唤英雄"), t!("民を捧げる", "dedicate workers", "献上民"), 'H' as u32, self.world.hero_of(pl).is_none(), Act::Summon, tip);
+        } else {
+            // 兵を選んでいれば、兵器（戦車・軍艦）に割り当てるボタン
+            let era_now = self.world.era;
+            let crews = self.own_sel().iter().filter(|&&h| self.world.unit(h).map_or(false, World::can_crew)).count();
+            if crews > 0 {
+                let mut bx1 = ix + iw - 14.0;
+                for &(k, _) in special_kinds(pl).iter().rev() {
+                    if !k.weapon() {
+                        continue;
+                    }
+                    let need = k.crew() as usize;
+                    let c = self.world.train_cost(pl, k);
+                    let res = self.world.nations[pl].res;
+                    let avail = self.world.kind_available(pl, k);
+                    let ok = avail && crews >= need && res[0] >= c[0] && res[1] >= c[1] && res[2] >= c[2];
+                    let key = if k.naval() { 'U' } else { 'B' };
+                    let label = tf!("{}に割り当て", "Crew {}", "编入{}", k.name(era_now));
+                    let sub = format!("{}{} {}", need, t!("人", " men", "人"), Self::cost_str(c));
+                    let mut tip = tf!(
+                        "選んだ兵のうち{}人を{}に割り当てる。兵は{}に変わり、兵に戻せない。能力は乗った兵の平均。{}",
+                        "Assign {} of the selected soldiers to a {}. They become a {} and can never be released. Its power is the crew's average. {}",
+                        "将所选士兵中的{}人编入{}。士兵变为{}，无法撤回。能力为乘员的平均值。{}",
+                        need,
+                        k.name(era_now),
+                        k.name(era_now),
+                        if k.naval() { t!("自国の軍港のそば（10マス以内）の兵だけが乗れる。", "Only soldiers near one of your docks (within 10 tiles) can crew it.", "只有己方军港附近（10格内）的士兵可以乘坐。") } else { t!("自国の領内の兵だけが乗れる。", "Only soldiers inside your territory can crew it.", "只有己方领土内的士兵可以乘坐。") }
+                    );
+                    if !avail {
+                        let from = special_kinds(pl).iter().find(|x| x.0 == k).map(|x| x.1).unwrap_or(0.0);
+                        let y = from.floor() as i32;
+                        let m = ((from - y as f32) * 12.0).floor() as i32 + 1;
+                        tip.push_str(&tf!("\n{}年{}月から造れる", "\nAvailable from {}/{}", "\n{}年{}月起可建造", y, m));
+                    }
+                    self.add_button(bx1 - 176.0, h - 58.0, bx1, h - 14.0, &label, &sub, key as u32, ok, Act::Crew(k), &tip);
+                    bx1 -= 182.0;
+                }
+            }
         }
 
         // スマートフォン：選択や建設場所選びを指で解く ✕
@@ -3624,10 +3674,10 @@ impl Game {
                 match b.kind {
                     BKind::Capital => t!("国の中心。民を訓練し、資源の集積地となる。失うと遷都し、全ての都市を失うと滅亡する。", "Heart of the state. Trains workers and stores resources. If it falls the capital moves; lose every city and the state falls.", "国家中心。训练民，存放资源。失去则迁都，失去全部城市则灭亡。"),
                     BKind::Town => t!("史実の都市。領土を広げ、民を訓練し、資源の集積地となる。新しい都市は築けない。都市を得ると人口の上限が上がる。", "A historical city. Expands territory, trains workers and stores resources. New cities cannot be founded; capturing cities raises your population limit.", "史实城市。扩张领土，训练民，存放资源。无法新建城市；夺取城市可提高人口上限。"),
-                    BKind::Barracks => t!("民を徴兵して歩兵・砲兵・騎兵（国によっては戦車・突撃兵・山岳兵）を訓練する。", "Drafts workers into infantry, artillery and cavalry (and, for some states, tanks, stormtroopers or mountain troops).", "征民训练步兵、炮兵、骑兵（部分国家还有坦克、突击兵、山地兵）。"),
+                    BKind::Barracks => t!("民を徴兵して歩兵・砲兵・騎兵（国によっては突撃兵・山岳兵）を訓練する。戦車は兵を5人選んで割り当てる。", "Drafts workers into infantry, artillery and cavalry (and, for some states, stormtroopers or mountain troops). Tanks are made by assigning 5 selected soldiers.", "征民训练步兵、炮兵、骑兵（部分国家还有突击兵、山地兵）。坦克须选5名士兵编入。"),
                     BKind::Farm => t!("民が耕すと食糧を産む。", "Produces food when a worker farms it.", "民耕作后产粮食。"),
                     BKind::Fort => t!("塹壕陣地：近づく敵兵を撃ち、そばの味方の損害を減らす。数は都市の数で決まる上限まで。", "Trench line: shoots enemy soldiers that come near and shields nearby troops. How many you may build depends on your number of cities.", "堑壕阵地：射击靠近的敌兵并减少附近友军的伤害。数量上限取决于城市数。"),
-                    BKind::Dock => t!("軍港：民を徴兵して Uボートや駆逐艦を造る。", "Naval base: drafts workers to crew U-boats and destroyers.", "军港：征民建造U艇或驱逐舰。"),
+                    BKind::Dock => t!("軍港：そばにいる兵を選んで Uボート（4人）・駆逐艦（6人）に割り当てる。", "Naval base: select soldiers near it and assign them to a U-boat (4) or destroyer (6).", "军港：选择附近的士兵编入U艇（4人）或驱逐舰（6人）。"),
                 }
             };
             let queue: Vec<(UnitKind, f32)> = b.queue.iter().enumerate().map(|(i, k)| (*k, if i == 0 { b.queue_t / k.train_time() } else { 0.0 })).collect();
@@ -3765,7 +3815,7 @@ impl Game {
                 for (k, key, tip) in [
                     (BKind::Farm, 'Q', t!("農場：民が耕すと食糧を産む。自国領内に建設。", "Farm: produces food when farmed. Build inside your territory.", "农场：民耕作后产粮食。建于己方领土内。")),
                     (BKind::Barracks, 'W', t!("兵営：民を徴兵して兵にする。自国領内に建設。", "Barracks: drafts workers into soldiers. Build inside your territory.", "兵营：征民为兵。建于己方领土内。")),
-                    (BKind::Dock, 'E', if can_dock { t!("軍港：Uボート・駆逐艦を造る。海に面した自国領内に建設。", "Naval base: builds U-boats and destroyers. Build on your coast.", "军港：建造U艇、驱逐舰。建于临海的己方领土内。") } else { t!("軍港：この国は軍艦を造れない（兵は港で自動的に船に乗る）", "Naval base: this state cannot build warships (troops board ships at ports automatically)", "军港：该国无法建造军舰（士兵会在港口自动登船）") }),
+                    (BKind::Dock, 'E', if can_dock { t!("軍港：そばの兵を Uボート・駆逐艦に割り当てられる。海に面した自国領内に建設。", "Naval base: soldiers near it can crew U-boats and destroyers. Build on your coast.", "军港：附近的士兵可编入U艇、驱逐舰。建于临海的己方领土内。") } else { t!("軍港：この国は軍艦を造れない（兵は港で自動的に船に乗る）", "Naval base: this state cannot build warships (troops board ships at ports automatically)", "军港：该国无法建造军舰（士兵会在港口自动登船）") }),
                 ] {
                     let (x0, y0, x1, y1) = pos(i);
                     let c = k.cost();
@@ -3862,12 +3912,11 @@ impl Game {
                 let mut list: Vec<UnitKind> = match kind {
                     BKind::Capital | BKind::Town => vec![UnitKind::Worker],
                     BKind::Barracks => vec![UnitKind::Infantry, UnitKind::Artillery, UnitKind::Cavalry],
-                    BKind::Dock => naval_kinds(pl),
-                    BKind::Farm | BKind::Fort => vec![],
+                    BKind::Dock | BKind::Farm | BKind::Fort => vec![],
                 };
                 if kind == BKind::Barracks {
                     for &(k, _) in special_kinds(pl) {
-                        if !k.naval() {
+                        if !k.weapon() {
                             list.push(k);
                         }
                     }

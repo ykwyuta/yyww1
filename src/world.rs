@@ -136,6 +136,19 @@ impl UnitKind {
     pub fn naval(self) -> bool {
         matches!(self, UnitKind::Submarine | UnitKind::Destroyer | UnitKind::Transport)
     }
+    /// 兵器に乗る兵の数（1＝兵器ではない）。兵器は兵を割り当てて造り、兵に戻せない
+    pub fn crew(self) -> u32 {
+        match self {
+            UnitKind::Tank => 5,
+            UnitKind::Submarine => 4,
+            UnitKind::Destroyer => 6,
+            _ => 1,
+        }
+    }
+    /// 兵を割り当てて造る兵器（戦車・Uボート・駆逐艦）
+    pub fn weapon(self) -> bool {
+        self.crew() > 1
+    }
     /// 陸の兵（民は含まない）
     pub fn land_mil(self) -> bool {
         self.military() && !self.naval()
@@ -167,18 +180,18 @@ impl UnitKind {
             UnitKind::Transport => t!("輸送船", "Transport", "运输船"),
         }
     }
-    /// [食糧, 木材, 鉄]（兵は民を1人徴兵したうえで、装備にこれだけかかる）
+    /// [食糧, 木材, 鉄]（兵は民を1人徴兵したうえで、装備にこれだけかかる。兵器は兵を割り当てたうえで、兵器そのものにこれだけかかる）
     pub fn cost(self) -> [f32; 3] {
         match self {
             UnitKind::Worker => [50.0, 0.0, 0.0],
             UnitKind::Infantry => [40.0, 20.0, 10.0],
             UnitKind::Artillery => [40.0, 60.0, 30.0],
             UnitKind::Cavalry => [80.0, 25.0, 10.0],
-            UnitKind::Tank => [50.0, 60.0, 80.0],
+            UnitKind::Tank => [0.0, 60.0, 100.0],
             UnitKind::Storm => [60.0, 30.0, 20.0],
             UnitKind::Alpine => [50.0, 40.0, 15.0],
-            UnitKind::Submarine => [50.0, 80.0, 60.0],
-            UnitKind::Destroyer => [50.0, 100.0, 60.0],
+            UnitKind::Submarine => [0.0, 100.0, 80.0],
+            UnitKind::Destroyer => [0.0, 120.0, 100.0],
             UnitKind::Transport => [0.0, 0.0, 0.0],
         }
     }
@@ -202,11 +215,11 @@ impl UnitKind {
             UnitKind::Infantry => 110.0,
             UnitKind::Artillery => 70.0,
             UnitKind::Cavalry => 120.0,
-            UnitKind::Tank => 280.0,
+            UnitKind::Tank => 700.0,
             UnitKind::Storm => 120.0,
             UnitKind::Alpine => 110.0,
-            UnitKind::Submarine => 90.0,
-            UnitKind::Destroyer => 170.0,
+            UnitKind::Submarine => 300.0,
+            UnitKind::Destroyer => 600.0,
             UnitKind::Transport => 110.0,
         }
     }
@@ -216,11 +229,11 @@ impl UnitKind {
             UnitKind::Infantry => 6.5,
             UnitKind::Artillery => 13.0,
             UnitKind::Cavalry => 8.5,
-            UnitKind::Tank => 11.0,
+            UnitKind::Tank => 30.0,
             UnitKind::Storm => 9.0,
             UnitKind::Alpine => 7.0,
-            UnitKind::Submarine => 30.0,
-            UnitKind::Destroyer => 15.0,
+            UnitKind::Submarine => 60.0,
+            UnitKind::Destroyer => 40.0,
             UnitKind::Transport => 0.0,
         }
     }
@@ -457,6 +470,10 @@ pub struct Unit {
 }
 
 impl Unit {
+    /// 兵の数で重みをつけた力（兵器は乗っている兵の数だけ）
+    pub fn strength(&self) -> f32 {
+        self.power * self.kind.crew() as f32
+    }
     pub fn max_hp(&self) -> f32 {
         self.kind.base_hp() * self.power
     }
@@ -1459,9 +1476,10 @@ impl World {
             if let Some(sh) = &u.ship {
                 // 船に乗っている兵も数える（輸送船そのものは数えない）
                 for c in sh.cargo.iter() {
-                    n.soldiers += 1;
-                    n.mil_power += c.power * c.hp.max(0.2);
-                    n.upkeep += 0.07 * c.power;
+                    let crew = c.kind.crew();
+                    n.soldiers += crew;
+                    n.mil_power += c.power * c.hp.max(0.2) * crew as f32;
+                    n.upkeep += 0.07 * c.power * crew as f32;
                 }
                 continue;
             }
@@ -1469,9 +1487,10 @@ impl World {
                 // 天使は天のもの、英雄は人口の上限・維持費の外
                 n.mil_power += u.power * (u.hp / u.max_hp()).max(0.2);
             } else if u.kind.military() {
-                n.soldiers += 1;
-                n.mil_power += u.power * (u.hp / u.max_hp()).max(0.2);
-                n.upkeep += 0.07 * u.power;
+                let crew = u.kind.crew();
+                n.soldiers += crew;
+                n.mil_power += u.power * (u.hp / u.max_hp()).max(0.2) * crew as f32;
+                n.upkeep += 0.07 * u.power * crew as f32;
             } else {
                 n.workers += 1;
                 n.eco_power += u.power;
@@ -1668,8 +1687,9 @@ impl World {
         }
         match b.kind {
             BKind::Capital | BKind::Town => kind == UnitKind::Worker,
-            BKind::Barracks => kind.land_mil(),
-            BKind::Dock => kind.naval() && kind != UnitKind::Transport,
+            // 兵器（戦車・Uボート・駆逐艦）は訓練せず、兵を割り当てて造る
+            BKind::Barracks => kind.land_mil() && !kind.weapon(),
+            BKind::Dock => false,
             BKind::Farm | BKind::Fort => false,
         }
     }
@@ -1735,11 +1755,96 @@ impl World {
         Ok(())
     }
 
+    /// 兵器に割り当てられる兵か（陸の兵で、兵器・英雄・天使でなく、渡海中でない）
+    pub fn can_crew(u: &Unit) -> bool {
+        u.alive && u.kind.land_mil() && !u.kind.weapon() && u.hero == NONE && !u.divine && u.ferry.is_none() && u.ship.is_none()
+    }
+
+    /// 兵器に兵を割り当てる：選んだ兵のうち必要な数を兵器に乗せる（兵は兵器に変わり、戻せない）。
+    /// 戦車は自国の領内で、軍艦は自国の軍港のそばで。兵器の能力は乗った兵の能力の平均
+    pub fn crew_weapon(&mut self, hs: &[Handle], kind: UnitKind) -> Result<Handle, &'static str> {
+        if !kind.weapon() {
+            return Err("");
+        }
+        let cand: Vec<usize> = hs.iter().filter_map(|&h| self.unit(h).map(|u| (h.idx as usize, u))).filter(|(_, u)| Self::can_crew(u)).map(|x| x.0).collect();
+        let Some(&first) = cand.first() else {
+            return Err(t!("兵器に割り当てる兵を選ぶ", "Select soldiers to crew the weapon", "请选择分配给兵器的士兵"));
+        };
+        let ni = self.units[first].nation as usize;
+        if !self.kind_available(ni, kind) {
+            return Err(t!("この国ではまだ造れない", "This state cannot build that (yet)", "该国（尚）无法建造"));
+        }
+        let need = kind.crew() as usize;
+        let mut cand: Vec<usize> = cand.into_iter().filter(|&i| self.units[i].nation as usize == ni).collect();
+        if cand.len() < need {
+            return Err(match kind {
+                UnitKind::Tank => t!("戦車には兵が5人要る", "A tank needs 5 soldiers", "坦克需要5名士兵"),
+                UnitKind::Submarine => t!("Uボートには兵が4人要る", "A U-boat needs 4 soldiers", "U艇需要4名士兵"),
+                _ => t!("駆逐艦には兵が6人要る", "A destroyer needs 6 soldiers", "驱逐舰需要6名士兵"),
+            });
+        }
+        // 兵の集まりの中心に近い兵から乗せる
+        let mut c = v2(0.0, 0.0);
+        for &i in cand.iter() {
+            c = c + self.units[i].pos;
+        }
+        c = c * (1.0 / cand.len() as f32);
+        cand.sort_by(|&a, &b| self.units[a].pos.dist(c).partial_cmp(&self.units[b].pos.dist(c)).unwrap());
+        cand.truncate(need);
+        let anchor = self.units[cand[0]].pos;
+        let spawn = if kind.naval() {
+            // 自国の軍港のそば
+            let mut best: Option<(f32, V2)> = None;
+            for b in self.blds.iter() {
+                if b.alive && b.done() && b.kind == BKind::Dock && b.nation as usize == ni {
+                    let d = b.center().dist(anchor);
+                    if d <= 10.0 && best.map_or(true, |x| d < x.0) {
+                        if let Some((x, y)) = self.dock_sea(b.tx, b.ty) {
+                            best = Some((d, v2(x as f32 + 0.5, y as f32 + 0.5)));
+                        }
+                    }
+                }
+            }
+            match best {
+                Some(b) => b.1,
+                None => return Err(t!("軍艦は自国の軍港のそばの兵に割り当てる", "Ships are crewed by soldiers near one of your docks", "军舰须由己方军港附近的士兵操纵")),
+            }
+        } else {
+            let (x, y) = anchor.tile();
+            if self.owner[Map::idx(x, y)] as usize != ni {
+                return Err(t!("戦車は自国の領内の兵に割り当てる", "Tanks are crewed by soldiers inside your territory", "坦克须由己方领土内的士兵操纵"));
+            }
+            anchor
+        };
+        if !self.try_pay(ni, self.train_cost(ni, kind)) {
+            return Err(t!("資源が足りない", "Not enough resources", "资源不足"));
+        }
+        let mut power = 0.0;
+        let mut hpr = 0.0;
+        for &i in cand.iter() {
+            let u = &self.units[i];
+            power += u.power;
+            hpr += u.hp / u.max_hp();
+        }
+        power /= need as f32;
+        hpr /= need as f32;
+        let sel = cand.iter().any(|&i| self.units[i].selected);
+        for &i in cand.iter() {
+            self.kill_unit(i);
+        }
+        let h = self.spawn_unit(ni, kind, spawn, power);
+        if let Some(u) = self.unit_mut(h) {
+            u.hp = u.max_hp() * hpr.clamp(0.1, 1.0);
+            u.selected = sel;
+        }
+        Ok(h)
+    }
+
     pub fn upgrade_cost(&self, u: &Unit) -> [f32; 3] {
         let p = u.power;
         let ni = u.nation as usize;
         let m = if ni < NATIONS.len() { self.nations[ni].tm.upgrade } else { 1.0 };
-        let total = (40.0 * p * m).round();
+        let total = (40.0 * p * m * u.kind.crew() as f32).round();
         // 蓄えの多い資源から優先して払う（資源の偏りで余らせないため）。蓄えが乏しいときは兵は糧・銅、民は糧・木が基本
         let base = if u.kind.military() { [25.0, 0.0, 15.0] } else { [25.0, 15.0, 0.0] };
         let res = if ni < NATIONS.len() { self.nations[ni].res } else { [0.0; 3] };
@@ -1793,6 +1898,9 @@ impl World {
         }
         if u.kind.naval() || u.divine || u.ferry.is_some() {
             return Err(t!("船は民にできない", "Ships cannot become workers", "船只无法转为民"));
+        }
+        if u.kind.weapon() {
+            return Err(t!("兵器に割り当てた兵は戻せない", "Crews assigned to a weapon cannot be released", "已分配给兵器的士兵无法撤回"));
         }
         let ni = u.nation as usize;
         let to_mil = !u.kind.military();
@@ -2030,9 +2138,9 @@ impl World {
         if killed {
             let vn = self.units[ti].nation as usize;
             // 損害の記録（世論に響く）。船が沈めば積んでいた兵も失う
-            let mut loss = if self.units[ti].kind == UnitKind::Transport { 0.0 } else { self.units[ti].power };
+            let mut loss = if self.units[ti].kind == UnitKind::Transport { 0.0 } else { self.units[ti].strength() };
             if let Some(sh) = &self.units[ti].ship {
-                loss += sh.cargo.iter().map(|c| c.power).sum::<f32>();
+                loss += sh.cargo.iter().map(|c| c.power * c.kind.crew() as f32).sum::<f32>();
             }
             let sunk_transport = self.units[ti].kind == UnitKind::Transport;
             if vn < NATIONS.len() {
@@ -3089,9 +3197,9 @@ impl World {
                     }
                     let un = u.nation as usize;
                     if un == n {
-                        mine += u.power;
+                        mine += u.strength();
                     } else if self.at_war(n, un) {
-                        enemy += u.power;
+                        enemy += u.strength();
                     }
                 }
             }
