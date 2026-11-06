@@ -135,6 +135,7 @@ impl Game {
         self.groups = groups;
         self.sel.clear();
         self.sel_b = None;
+        self.sel_bs.clear();
         self.last_sel.clear();
         self.mode = Mode::Normal;
         self.cmd_pause = false;
@@ -260,7 +261,6 @@ impl Game {
         self.add_button(x0 + pw - 90.0, y0 + 10.0, x0 + pw - 14.0, y0 + 40.0, t!("閉じる", "Close", "关闭"), "", 0, true, Act::CloseOverlay, "");
 
         let can = self.can_save();
-        let playing = self.screen == Screen::Playing && self.tut.is_none();
         let tc = [0.95, 0.92, 0.85, 1.0];
         let dim = [0.62, 0.60, 0.55, 1.0];
         let gold = [1.0, 0.85, 0.5, 1.0];
@@ -289,59 +289,23 @@ impl Game {
             // 右から：書き出す・読込・保存
             let has = info.is_some();
             let ex = bxr - bw;
-            self.add_button(ex, by, ex + bw, by + 32.0, t!("書き出す", "Export", "导出"), "", 0, has, Act::ExportSlot(s), t!("この記録をファイルとして保存する（別の端末へ移す・控えにする）", "Save this as a file (to move it to another PC or keep a backup)", "将此存档保存为文件（用于转移到其他电脑或备份）"));
+            self.add_button(ex, by, ex + bw, by + 32.0, t!("書き出す", "Export", "导出"), "", 0, has, Act::ExportSlot(s), "");
             let lx = ex - bw - 6.0;
-            let tip = if playing { t!("この記録から再開する（いまの対局は失われる。必要なら先に記録する）", "Resume from this save (the current game will be lost; save it first if needed)", "从此存档继续（当前对局将丢失，如有需要请先保存）") } else { t!("この記録から再開する", "Resume from this save", "从此存档继续") };
-            self.add_button(lx, by, lx + bw, by + 32.0, t!("読込", "Load", "读取"), "", 0, has, Act::LoadSlot(s), tip);
+            self.add_button(lx, by, lx + bw, by + 32.0, t!("読込", "Load", "读取"), "", 0, has, Act::LoadSlot(s), "");
             if s > 0 {
                 let sx = lx - bw - 6.0;
-                let tip = match can {
-                    Ok(()) => {
-                        if has {
-                            t!("いまの対局をこの枠に記録する（上書き）", "Save the current game in this slot (overwrite)", "将当前对局保存到此栏位（覆盖）")
-                        } else {
-                            t!("いまの対局をこの枠に記録する", "Save the current game in this slot", "将当前对局保存到此栏位")
-                        }
-                    }
-                    Err(e) => e,
-                };
-                self.add_button(sx, by, sx + bw, by + 32.0, t!("保存", "Save", "保存"), "", 0, can.is_ok(), Act::SaveSlot(s), tip);
+                self.add_button(sx, by, sx + bw, by + 32.0, t!("保存", "Save", "保存"), "", 0, can.is_ok(), Act::SaveSlot(s), "");
             }
             y += row;
         }
         let by = y0 + ph - 54.0;
-        self.add_button(bx0, by, bx0 + 260.0, by + 40.0, t!("ファイルから読み込む", "Load from file", "从文件读取"), "", 0, true, Act::ImportFile, t!("書き出した記録ファイル（.yysav）を選んで再開する", "Choose an exported save file (.yysav) to resume", "选择导出的存档文件（.yysav）继续游戏"));
+        self.add_button(bx0, by, bx0 + 260.0, by + 40.0, t!("ファイルから読み込む", "Load from file", "从文件读取"), "", 0, true, Act::ImportFile, "");
         if let Err(e) = can {
             if self.screen == Screen::Playing {
                 self.gfx.text(e, bx0 + 280.0, by + 10.0, bx1 - bx0 - 290.0, 22.0, Font::Normal, dim);
             }
         } else {
             self.gfx.text(t!("F5 でこの画面を開く", "F5 opens this screen", "按 F5 打开此画面"), bx0 + 280.0, by + 10.0, bx1 - bx0 - 290.0, 22.0, Font::Normal, dim);
-        }
-        // 説明（ツールチップ）：対局中は共通の仕組みで出るので、タイトル画面だけ
-        if self.screen != Screen::Title {
-            return;
-        }
-        let (mx, my) = self.mouse;
-        let mut tip = None;
-        for b in self.buttons.iter().rev() {
-            if mx >= b.x0 && mx <= b.x1 && my >= b.y0 && my <= b.y1 {
-                if b.label == BLOCK_LABEL {
-                    break;
-                }
-                if !b.tip.is_empty() {
-                    tip = Some(b.tip.clone());
-                    break;
-                }
-            }
-        }
-        if let Some(t) = tip {
-            let tw = 420.0f32.min(pw - 40.0);
-            let th = self.gfx.measure_h(&t, Font::Small, tw - 16.0) + 10.0;
-            let tx0 = (mx + 14.0).min(w - tw - 6.0);
-            let ty0 = (my + 18.0).min(h - th - 6.0);
-            self.art.draw_inset_box(&self.gfx, tx0, ty0, tx0 + tw, ty0 + th);
-            self.gfx.text(&t, tx0 + 8.0, ty0 + 5.0, tw - 16.0, th, Font::Small, [0.95, 0.92, 0.85, 1.0]);
         }
     }
 }

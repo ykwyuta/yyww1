@@ -64,7 +64,7 @@ You see only around your own and your allies' workers, soldiers and buildings. E
 
 ## Controls
 
-- Left click: select   Drag: box select   Double click: select all of a type   Shift: add to selection
+- Left click: select   Drag: box select   Double click: select all of a type (works on barracks and cities too; training queues in each)   Shift: add to selection
 - Right click: move / attack / gather (forest, mine, farm) / help build   Right click with a building selected: rally point
 - A: attack-move   S: stop   T: train / educate   C: convert soldier ⇔ worker   Q/W/E/R: build / train
 - Hold Ctrl while placing buildings: reserve builds (keep placing)
