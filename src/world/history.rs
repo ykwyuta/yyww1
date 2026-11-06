@@ -367,7 +367,7 @@ impl World {
         self.territory_dirty = true;
         let name = tx(self.nations[n].name);
         let head = tf!("【{}・{}】{}", "[{} · {}] {}", "【{}・{}】{}", name, e.kind.label(), tx(e.title));
-        // 本文はバナーと史記に任せ、記録欄は見出しと効果だけにする
+        // 本文はバナーと戦史に任せ、記録欄は見出しと効果だけにする
         let mut msg = head;
         if !notes.is_empty() {
             msg.push_str(&tf!("（{}）", " ({})", "（{}）", notes.join(t!("、", "; ", "；"))));

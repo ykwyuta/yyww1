@@ -913,7 +913,7 @@ impl Game {
                     }
                     self.speed = std::env::var("YY_SPEED").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
                     self.zoom = z;
-                    // 撮影直前にキーを押す（例：72 で史記を開く）
+                    // 撮影直前にキーを押す（例：72 で戦史を開く）
                     // YY_PRESS は「47,48」のように複数のキーを0.5秒おきに押せる
                     if let Ok(v) = std::env::var("YY_PRESS") {
                         let at = std::env::var("YY_PRESS_AT").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(secs - 0.6);
