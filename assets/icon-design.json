@@ -1,0 +1,7 @@
+{
+  "generator": "OpenAI built-in image_gen",
+  "purpose": "Dedicated application icon",
+  "prompt": "Create one premium square videogame application icon, 1024x1024, for a serious World War One European strategy game. An imposing historically recognizable British Mark IV rhomboid tank, front three-quarter low-angle view, broad unmistakable diamond-shaped tracks and riveted armored body, NO modern tank turret; stylized as a dramatic sculpted gunmetal and antique bronze military emblem. A restrained half-wreath of burnished bronze laurel frames the lower sides, behind a single bold tank silhouette, with subtle burnt-orange battlefield glow illuminating the silhouette against near-black coal charcoal. Sophisticated cinematic strategy-game identity, powerful, prestigious, steel blue edge lights, warm brass highlights, strong contrast, chunky sculptural forms, sparse readable details, tank fills 70% of square, emblem cleanly readable at 32 pixels. No complex battle scene, no soldiers, no guns outside the tank, no flags, no eagles, no modern insignia, no text, no numbers, no letters, no watermarks, no UI, no app mockup, no rounded-square frame. Opaque full-bleed square image, approximately 10% padding.",
+  "source": "assets/app_icon.png",
+  "export_command": "python tools/update_app_icons.py"
+}
